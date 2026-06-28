@@ -1,0 +1,59 @@
+{
+  "runName": "ax-top5-longest-roberta-llm-review",
+  "dataset": {
+    "kind": "private",
+    "privateConversationLimit": 5,
+    "privateConversationOrder": "longest",
+    "maxMessagesPerConversation": 0,
+    "includeWindowTextInOutput": true
+  },
+  "windowing": [
+    { "size": 16, "stride": 8 }
+  ],
+  "selection": {
+    "strategy": "top_shift",
+    "maxWindowsPerConversation": 10,
+    "candidateScorer": "roberta_emotion"
+  },
+  "deterministic": [
+    "roberta_emotion"
+  ],
+  "llm": [
+    {
+      "name": "top5_qwen_selected_16x8_prior_summary",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "runMode": "selected_windows",
+      "window": { "size": 16, "stride": 8 },
+      "contextMode": "prior_summary",
+      "maxConversations": 5,
+      "concurrency": 8,
+      "maxWindows": 50,
+      "maxTokens": 350
+    },
+    {
+      "name": "top5_mistral_selected_16x8_prior_summary",
+      "provider": "openrouter",
+      "model": "mistralai/mistral-small-2603",
+      "runMode": "selected_windows",
+      "window": { "size": 16, "stride": 8 },
+      "contextMode": "prior_summary",
+      "maxConversations": 5,
+      "concurrency": 8,
+      "maxWindows": 50,
+      "maxTokens": 350
+    },
+    {
+      "name": "top5_openai_selected_16x8_prior_summary",
+      "provider": "openai",
+      "model": "gpt-4.1-nano",
+      "runMode": "selected_windows",
+      "window": { "size": 16, "stride": 8 },
+      "contextMode": "prior_summary",
+      "maxConversations": 5,
+      "concurrency": 8,
+      "maxWindows": 50,
+      "maxTokens": 350
+    }
+  ]
+}

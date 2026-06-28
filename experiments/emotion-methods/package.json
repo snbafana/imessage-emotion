@@ -1,0 +1,43 @@
+{
+  "name": "imessage-emotion-methods",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "harness:ax": "tsx harness_ax.ts --config harness.ax.json --out out/harness-ax-results.json",
+    "harness:ax:sweep": "tsx harness_ax.ts --config harness.ax.sweep.json --out out/harness-ax-sweep-results.json",
+    "harness:ax:large": "tsx harness_ax.ts --config harness.ax.large.json --out out/harness-ax-large-results.json",
+    "harness:ax:conversation": "tsx harness_ax.ts --config harness.ax.conversation.json --out out/harness-ax-conversation-results.json",
+    "harness:ax:top5": "tsx harness_ax.ts --config harness.ax.top5.json --out out/harness-ax-top5-results.json",
+    "graphs:ax": "uv run python plot_ax_results.py --input out/harness-ax-large-results.json --out-dir out/graphs",
+    "graphs:top5": "uv run python plot_ax_results.py --input out/harness-ax-top5-results.json --out-dir out/graphs/top5",
+    "graph:conversation": "uv run python plot_conversation_heatmap.py --input out/harness-ax-large-results.json --conversation private_c01 --source deterministic --method roberta_emotion --window-size 16 --stride 8 --chart line --out out/graphs/private_c01_emotion_line.png",
+    "graph:conversation:heatmap": "uv run python plot_conversation_heatmap.py --input out/harness-ax-large-results.json --conversation private_c01 --source deterministic --method roberta_emotion --window-size 16 --stride 8 --chart heatmap --out out/graphs/private_c01_emotion_heatmap.png",
+    "graph:conversation:llm": "uv run python plot_conversation_heatmap.py --input out/harness-ax-conversation-results.json --conversation private_c01 --source llm --llm-run conversation_qwen_all_16x8_prior_summary --window-size 16 --stride 8 --chart line --out out/graphs/private_c01_llm_emotion_line.png",
+    "graph:conversation:llm:heatmap": "uv run python plot_conversation_heatmap.py --input out/harness-ax-conversation-results.json --conversation private_c01 --source llm --llm-run conversation_qwen_all_16x8_prior_summary --window-size 16 --stride 8 --chart heatmap --out out/graphs/private_c01_llm_emotion_heatmap.png",
+    "typecheck": "tsc --noEmit",
+    "legacy:baseline": "node run.mjs",
+    "legacy:baseline:synthetic": "node run.mjs --synthetic-only",
+    "legacy:baseline:private": "node run.mjs --private",
+    "legacy:ax-smoke": "node run_ax_methods.mjs",
+    "llm:methods": "uv run python run_llm_methods.py --private --local-generative",
+    "llm:providers": "uv run python run_llm_methods.py --private --openai --dspy",
+    "agent:trajectory": "uv run python run_llm_methods.py --private --agent-trajectory --agent-private-conversations 2 --agent-windows-per-conversation 6",
+    "agent:pivotal": "uv run python run_llm_methods.py --private --pivotal-audit --pivotal-private-conversations 1 --pivotal-candidates-per-conversation 1 --pivotal-max-depth 2",
+    "llm:latency": "uv run python run_llm_methods.py --private --latency-benchmark --latency-private-conversations 2 --latency-windows-per-conversation 4 --latency-models gpt-5-nano,gpt-4.1-nano,gpt-4o-mini,gpt-5-mini --latency-concurrency 1,4",
+    "llm:batch": "uv run python run_llm_methods.py --private --batch-benchmark --batch-private-conversations 4 --batch-windows-per-conversation 4 --batch-models gpt-4.1-nano,gpt-5-nano:minimal --batch-sizes 4,8 --batch-concurrency 2",
+    "harness:quick": "uv run python harness.py --config harness.quick.json --out out/harness-quick-results.json",
+    "harness:providers": "uv run python harness.py --config harness.provider.json --out out/harness-provider-results.json"
+  },
+  "dependencies": {
+    "@ax-llm/ax": "^22.0.7",
+    "@huggingface/transformers": "^4.2.0",
+    "openai": "^6.45.0",
+    "sentiment": "^5.0.2",
+    "vader-sentiment": "^1.1.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  }
+}

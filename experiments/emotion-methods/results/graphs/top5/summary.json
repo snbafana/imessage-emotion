@@ -1,0 +1,229 @@
+{
+  "dataset": {
+    "conversationCount": 5,
+    "kinds": {
+      "private": 5
+    },
+    "conversations": [
+      {
+        "id": "private_c01",
+        "kind": "private",
+        "fullMessageCount": 8455,
+        "loadedMessageCount": 2000
+      },
+      {
+        "id": "private_c02",
+        "kind": "private",
+        "fullMessageCount": 4233,
+        "loadedMessageCount": 2000
+      },
+      {
+        "id": "private_c03",
+        "kind": "private",
+        "fullMessageCount": 3019,
+        "loadedMessageCount": 2000
+      },
+      {
+        "id": "private_c04",
+        "kind": "private",
+        "fullMessageCount": 2238,
+        "loadedMessageCount": 2000
+      },
+      {
+        "id": "private_c05",
+        "kind": "private",
+        "fullMessageCount": 2010,
+        "loadedMessageCount": 2000
+      }
+    ]
+  },
+  "llm": [
+    {
+      "name": "top5_qwen_selected_16x8_prior_summary",
+      "mode": "selected_windows",
+      "context": "prior_summary",
+      "window": {
+        "size": 16,
+        "stride": 8
+      },
+      "ok": 50,
+      "errors": 0,
+      "wallSeconds": 11.6,
+      "avgLatencySeconds": 1.8,
+      "dominantCounts": {
+        "joy": 21,
+        "fear": 1,
+        "neutral": 11,
+        "surprise": 12,
+        "sadness": 2,
+        "anger": 3
+      }
+    },
+    {
+      "name": "top5_mistral_selected_16x8_prior_summary",
+      "mode": "selected_windows",
+      "context": "prior_summary",
+      "window": {
+        "size": 16,
+        "stride": 8
+      },
+      "ok": 50,
+      "errors": 0,
+      "wallSeconds": 12.69,
+      "avgLatencySeconds": 1.94,
+      "dominantCounts": {
+        "joy": 17,
+        "neutral": 19,
+        "surprise": 8,
+        "anger": 3,
+        "sadness": 2,
+        "disgust": 1
+      }
+    },
+    {
+      "name": "top5_openai_selected_16x8_prior_summary",
+      "mode": "selected_windows",
+      "context": "prior_summary",
+      "window": {
+        "size": 16,
+        "stride": 8
+      },
+      "ok": 50,
+      "errors": 0,
+      "wallSeconds": 13.65,
+      "avgLatencySeconds": 2.04,
+      "dominantCounts": {
+        "neutral": 33,
+        "fear": 2,
+        "joy": 9,
+        "surprise": 6
+      }
+    },
+    {
+      "name": "top5_qwen_selected_8x4_prior_messages",
+      "mode": "selected_windows",
+      "context": "prior_messages",
+      "window": {
+        "size": 8,
+        "stride": 4
+      },
+      "ok": 50,
+      "errors": 0,
+      "wallSeconds": 9.82,
+      "avgLatencySeconds": 1.51,
+      "dominantCounts": {
+        "joy": 18,
+        "fear": 4,
+        "disgust": 2,
+        "neutral": 9,
+        "anger": 10,
+        "surprise": 6,
+        "sadness": 1
+      }
+    }
+  ],
+  "deterministic": [
+    {
+      "name": "roberta_emotion",
+      "window": {
+        "size": 8,
+        "stride": 4
+      },
+      "totalWindows": 2500,
+      "dominantCounts": {
+        "joy": 360,
+        "surprise": 1094,
+        "neutral": 762,
+        "fear": 40,
+        "sadness": 125,
+        "anger": 112,
+        "disgust": 7
+      }
+    },
+    {
+      "name": "emoji_keyword_features",
+      "window": {
+        "size": 8,
+        "stride": 4
+      },
+      "totalWindows": 2500,
+      "dominantCounts": {
+        "joy": 627,
+        "disgust": 543,
+        "neutral": 579,
+        "anger": 422,
+        "fear": 90,
+        "sadness": 168,
+        "surprise": 71
+      }
+    },
+    {
+      "name": "roberta_emotion",
+      "window": {
+        "size": 16,
+        "stride": 8
+      },
+      "totalWindows": 1250,
+      "dominantCounts": {
+        "joy": 172,
+        "surprise": 558,
+        "neutral": 373,
+        "fear": 26,
+        "disgust": 3,
+        "anger": 63,
+        "sadness": 55
+      }
+    },
+    {
+      "name": "emoji_keyword_features",
+      "window": {
+        "size": 16,
+        "stride": 8
+      },
+      "totalWindows": 1250,
+      "dominantCounts": {
+        "neutral": 285,
+        "joy": 346,
+        "disgust": 423,
+        "anger": 103,
+        "fear": 41,
+        "sadness": 40,
+        "surprise": 12
+      }
+    },
+    {
+      "name": "roberta_emotion",
+      "window": {
+        "size": 32,
+        "stride": 16
+      },
+      "totalWindows": 625,
+      "dominantCounts": {
+        "joy": 78,
+        "surprise": 269,
+        "neutral": 202,
+        "fear": 22,
+        "disgust": 1,
+        "anger": 28,
+        "sadness": 25
+      }
+    },
+    {
+      "name": "emoji_keyword_features",
+      "window": {
+        "size": 32,
+        "stride": 16
+      },
+      "totalWindows": 625,
+      "dominantCounts": {
+        "joy": 204,
+        "neutral": 131,
+        "disgust": 216,
+        "anger": 48,
+        "surprise": 2,
+        "sadness": 9,
+        "fear": 15
+      }
+    }
+  ]
+}

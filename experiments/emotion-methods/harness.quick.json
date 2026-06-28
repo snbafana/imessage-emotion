@@ -1,0 +1,26 @@
+{
+  "runName": "quick-local-smoke",
+  "dataset": {
+    "kind": "synthetic",
+    "privateConversationLimit": 0,
+    "maxMessagesPerConversation": 600
+  },
+  "windowing": [
+    { "size": 4, "stride": 2 },
+    { "size": 8, "stride": 4 }
+  ],
+  "selection": {
+    "strategy": "top_shift",
+    "maxWindowsPerConversation": 4
+  },
+  "deterministic": [
+    "vader",
+    "afinn",
+    "nrclex",
+    "emoji_keyword_features",
+    "relationship_proxy_features",
+    "node_sentiment"
+  ],
+  "hf": [],
+  "llm": []
+}
