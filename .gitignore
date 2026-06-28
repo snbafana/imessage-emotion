@@ -1,35 +1,32 @@
-# Logs
-logs
-*.log
+# dependencies
+node_modules
+.pnp
+.pnp.js
+
+# next.js
+.next/
+out/
+build/
+next-env.d.ts
+
+# typescript
+*.tsbuildinfo
+
+# misc
+.DS_Store
+*.pem
+.env*
+!.env.example
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-dist-electron
-release
-*.local
-.smoke-dashboard-real
+# app data (local SQLite the app syncs into)
+*.sqlite
+*.sqlite-journal
 
-# Editor directories and files
-
-# Local SQLite benchmark artifacts
+# experiments (own toolchains)
 experiments/sqlite-latency/tmp/
 experiments/sqlite-latency/results/
 experiments/sqlite-latency/target/
 experiments/sqlite-latency/rust/target/
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?

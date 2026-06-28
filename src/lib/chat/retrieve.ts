@@ -1,4 +1,4 @@
-import type { AppDatabase } from '../db/schema.ts'
+import type { AppDatabase } from '../db/schema'
 
 export interface AskConversationInput {
   conversationId: number

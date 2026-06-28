@@ -1,11 +1,11 @@
-import type { AppDatabase } from '../db/schema.ts'
+import type { AppDatabase } from '../db/schema'
 import {
   retrieveConversationContext,
   type AskConversationInput,
   type ChatWindow,
   type ChatWindowMessage,
   type ConversationChatPacket,
-} from './retrieve.ts'
+} from './retrieve'
 
 export type { AskConversationInput, ConversationChatPacket }
 

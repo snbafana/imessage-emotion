@@ -1,5 +1,8 @@
+'use client'
+
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@base-ui/react/button'
+import { trpc } from '../lib/trpc/client'
 import { ChevronIcon, SendIcon, SparkleIcon } from './icons'
 
 type Turn = {
@@ -70,7 +73,7 @@ export default function ChatPanel({
 
     setIsAsking(true)
     try {
-      const response = await window.ipcRenderer.askConversation({
+      const response = await trpc.askConversation.mutate({
         conversationId,
         runId,
         windowId: selectedWindowId,
