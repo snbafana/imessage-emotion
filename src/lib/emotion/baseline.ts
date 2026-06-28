@@ -1,4 +1,6 @@
-export type BaselineEmotion = 'warmth' | 'joy' | 'stress' | 'friction' | 'sadness'
+import { EKMAN_ANCHORS, type Anchor, type AnchorScores } from './anchors'
+
+export type BaselineEmotion = Anchor
 
 export interface BaselineMessage {
   id: number
@@ -6,102 +8,31 @@ export interface BaselineMessage {
 }
 
 export interface BaselineResult {
-  scores: Record<BaselineEmotion, number>
-  dominant: BaselineEmotion | 'neutral'
+  scores: AnchorScores
+  dominant: Anchor
   confidence: number
   summary: string
   evidenceMessageIds: number[]
   method: 'baseline-v1'
 }
 
-const lexicon: Record<BaselineEmotion, string[]> = {
-  warmth: [
-    'appreciate',
-    'care',
-    'caring',
-    'glad',
-    'grateful',
-    'heart',
-    'helpful',
-    'hug',
-    'kind',
-    'love',
-    'miss',
-    'proud',
-    'support',
-    'sweet',
-    'thanks',
-    'thank',
-  ],
-  joy: [
-    'amazing',
-    'awesome',
-    'celebrate',
-    'excited',
-    'fun',
-    'haha',
-    'happy',
-    'hilarious',
-    'joy',
-    'lol',
-    'nice',
-    'perfect',
-    'yay',
-    'yes',
-  ],
-  stress: [
-    'anxious',
-    'busy',
-    'deadline',
-    'exhausted',
-    'late',
-    'overwhelmed',
-    'pressure',
-    'stressed',
-    'stress',
-    'swamped',
-    'tense',
-    'tired',
-    'urgent',
-    'worried',
-  ],
-  friction: [
-    'angry',
-    'annoyed',
-    'argue',
-    'blame',
-    'conflict',
-    'fight',
-    'frustrated',
-    'mad',
-    'no',
-    'problem',
-    'rude',
-    'upset',
-    'wrong',
-  ],
-  sadness: [
-    'alone',
-    'cry',
-    'disappointed',
-    'grief',
-    'hurt',
-    'lonely',
-    'sad',
-    'sorry',
-    'tears',
-    'unhappy',
-  ],
+// Deterministic lexical pass over the Ekman anchors (ported from
+// experiments/emotion-methods harness_ax.ts FEATURE_LEXICON). Not the final
+// model — the ax LLM scorer (agent/tools/score_window) is the production path.
+const lexicon: Record<Anchor, string[]> = {
+  anger: ['mad', 'angry', 'frustrated', 'annoyed', 'hurt', 'issue', 'dodging', 'dismissed', 'defensive', 'upset'],
+  disgust: ['gross', 'disgusting', 'ugh', 'ew', 'nasty', 'hate'],
+  fear: ['worried', 'anxious', 'stress', 'stressed', 'overwhelmed', 'panic', 'scared', 'nervous', 'please'],
+  joy: ['love', 'loved', 'miss', 'missed', 'care', 'appreciate', 'thank', 'thanks', 'proud', 'sweet', 'kind', 'hug', 'lol', 'haha', 'fun', 'funny', 'excited', 'yay', 'great', 'amazing'],
+  neutral: ['train', 'delayed', 'keys', 'desk', 'arrive', 'when', 'where', 'time', 'minutes', 'tomorrow', 'today', 'schedule'],
+  sadness: ['sad', 'sorry', 'tired', 'distant', 'later', 'energy', 'alone'],
+  surprise: ['wow', 'whoa', 'omg', 'surprised', 'unexpected', 'wait'],
 }
 
-const emotionOrder: BaselineEmotion[] = ['warmth', 'joy', 'stress', 'friction', 'sadness']
 const tokenPattern = /[a-z']+/g
 
 export function scoreBaselineMessages(messages: BaselineMessage[]): BaselineResult {
-  const counts = Object.fromEntries(emotionOrder.map((emotion) => [emotion, 0])) as Record<
-    BaselineEmotion,
-    number
-  >
+  const counts = Object.fromEntries(EKMAN_ANCHORS.map((a) => [a, 0])) as AnchorScores
   const evidenceScores = new Map<number, number>()
 
   for (const message of messages) {
@@ -109,11 +40,11 @@ export function scoreBaselineMessages(messages: BaselineMessage[]): BaselineResu
     const tokens = text.match(tokenPattern) ?? []
     let messageHits = 0
 
-    for (const emotion of emotionOrder) {
-      const words = lexicon[emotion]
+    for (const anchor of EKMAN_ANCHORS) {
+      const words = lexicon[anchor]
       for (const token of tokens) {
         if (words.includes(token)) {
-          counts[emotion] += 1
+          counts[anchor] += 1
           messageHits += 1
         }
       }
@@ -122,19 +53,15 @@ export function scoreBaselineMessages(messages: BaselineMessage[]): BaselineResu
     if (messageHits > 0) evidenceScores.set(message.id, messageHits)
   }
 
-  const totalHits = emotionOrder.reduce((sum, emotion) => sum + counts[emotion], 0)
+  const totalHits = EKMAN_ANCHORS.reduce((sum, a) => sum + counts[a], 0)
+  // No lexical hits anywhere => treat the window as neutral.
   const scores = Object.fromEntries(
-    emotionOrder.map((emotion) => [emotion, normalizeScore(counts[emotion], totalHits)]),
-  ) as Record<BaselineEmotion, number>
-  const dominant =
-    totalHits === 0
-      ? 'neutral'
-      : emotionOrder.reduce((best, emotion) => (scores[emotion] > scores[best] ? emotion : best))
-  const sortedScores = [...emotionOrder].sort((left, right) => scores[right] - scores[left])
+    EKMAN_ANCHORS.map((a) => [a, totalHits === 0 ? (a === 'neutral' ? 1 : 0) : roundScore(counts[a] / totalHits)]),
+  ) as AnchorScores
+  const dominant = EKMAN_ANCHORS.reduce((best, a) => (scores[a] > scores[best] ? a : best), 'neutral' as Anchor)
+  const sorted = [...EKMAN_ANCHORS].sort((l, r) => scores[r] - scores[l])
   const confidence =
-    totalHits === 0
-      ? 0
-      : roundScore(Math.min(1, scores[sortedScores[0]] - scores[sortedScores[1]] + totalHits / 30))
+    totalHits === 0 ? 0 : roundScore(Math.min(1, scores[sorted[0]] - scores[sorted[1]] + totalHits / 30))
 
   return {
     scores,
@@ -142,16 +69,11 @@ export function scoreBaselineMessages(messages: BaselineMessage[]): BaselineResu
     confidence,
     summary: 'Baseline lexical pass; not final model.',
     evidenceMessageIds: [...evidenceScores.entries()]
-      .sort((left, right) => right[1] - left[1] || left[0] - right[0])
+      .sort((l, r) => r[1] - l[1] || l[0] - r[0])
       .slice(0, 5)
       .map(([id]) => id),
     method: 'baseline-v1',
   }
-}
-
-function normalizeScore(count: number, totalHits: number): number {
-  if (totalHits === 0) return 0
-  return roundScore(count / totalHits)
 }
 
 function roundScore(value: number): number {

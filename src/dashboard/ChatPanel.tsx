@@ -1,17 +1,8 @@
 'use client'
 
-import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react'
-import { Button } from '@base-ui/react/button'
-import { trpc } from '../lib/trpc/client'
-import { ChevronIcon, SendIcon, SparkleIcon } from './icons'
-
-type Turn = {
-  id: string
-  role: 'user' | 'agent'
-  text: string
-  status?: 'submitted' | 'done' | 'error'
-  citations?: Array<{ label: string }>
-}
+import { FormEvent, useState } from 'react'
+import { useEveAgent } from 'eve/react'
+import { SendIcon, SparkleIcon } from './icons'
 
 type ChatPanelProps = {
   conversationId?: number
@@ -20,104 +11,35 @@ type ChatPanelProps = {
   label?: string
 }
 
-export default function ChatPanel({
-  conversationId,
-  runId,
-  windowId = null,
-  label = 'selected run',
-}: ChatPanelProps) {
+type Scope = 'whole' | 'window'
+
+function toolStateMark(state: string): { mark: string; color: string } {
+  if (state === 'output-available') return { mark: '✓', color: '#2E9E8F' }
+  if (state === 'output-error' || state === 'output-denied') return { mark: '!', color: '#D6453B' }
+  return { mark: '⋯', color: '#9A9AA0' } // input-streaming / input-available / approval-*
+}
+
+export default function ChatPanel({ conversationId, runId, windowId = null, label = 'this run' }: ChatPanelProps) {
+  const agent = useEveAgent()
   const [draft, setDraft] = useState('')
-  const [turns, setTurns] = useState<Turn[]>([])
-  const [isAsking, setIsAsking] = useState(false)
-  const bodyRef = useRef<HTMLDivElement | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const trimmedDraft = draft.trim()
-  const isOverMaxLength = trimmedDraft.length > 1000
+  const [scope, setScope] = useState<Scope>(windowId != null ? 'window' : 'whole')
 
-  useEffect(() => {
-    bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: 'smooth' })
-  }, [turns, isAsking])
+  const busy = agent.status === 'submitted' || agent.status === 'streaming'
 
-  useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
-      textareaRef.current?.focus({ preventScroll: true })
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [])
-
-  const submitQuestion = useCallback(async () => {
-    const question = draft.trim()
-    if (!question || isAsking || isOverMaxLength) return
-
-    setDraft('')
-    const questionId = `user-${Date.now()}`
-    setTurns((current) => [
-      ...current,
-      { id: questionId, role: 'user', text: question, status: 'submitted' },
-    ])
-    if (conversationId === undefined || runId === undefined || windowId === null) {
-      setTurns((current) => [
-        ...current.map((turn) =>
-          turn.id === questionId ? { ...turn, status: 'done' as const } : turn,
-        ),
-        {
-          id: `agent-${Date.now()}`,
-          role: 'agent',
-          status: 'error',
-          text: 'Select a conversation, analysis run, and window before asking about the timeline.',
-        },
-      ])
-      return
-    }
-    const selectedWindowId = windowId
-
-    setIsAsking(true)
-    try {
-      const response = await trpc.askConversation.mutate({
-        conversationId,
-        runId,
-        windowId: selectedWindowId,
-        question,
-      })
-      setTurns((current) => [
-        ...current.map((turn) =>
-          turn.id === questionId ? { ...turn, status: 'done' as const } : turn,
-        ),
-        {
-          id: `agent-${Date.now()}`,
-          role: 'agent',
-          status: 'done',
-          text: response.answer,
-          citations: response.citations?.map((citation) => ({ label: citation.label })),
-        },
-      ])
-    } catch (error) {
-      setTurns((current) => [
-        ...current.map((turn) =>
-          turn.id === questionId ? { ...turn, status: 'done' as const } : turn,
-        ),
-        {
-          id: `agent-${Date.now()}`,
-          role: 'agent',
-          status: 'error',
-          text: error instanceof Error ? error.message : 'Chat request failed.',
-        },
-      ])
-    } finally {
-      setIsAsking(false)
-    }
-  }, [conversationId, draft, isAsking, isOverMaxLength, runId, windowId])
-
-  function ask(event: FormEvent<HTMLFormElement>) {
+  function submit(event: FormEvent) {
     event.preventDefault()
-    void submitQuestion()
-  }
-
-  function submitOnEnter(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault()
-      void submitQuestion()
-    }
+    const question = draft.trim()
+    if (!question || busy) return
+    setDraft('')
+    void agent.send({
+      message: question,
+      clientContext: {
+        scope,
+        conversationId: conversationId ?? null,
+        runId: runId ?? null,
+        windowId: scope === 'window' ? windowId : null,
+      },
+    })
   }
 
   return (
@@ -125,66 +47,81 @@ export default function ChatPanel({
       <div className="chat-head">
         <SparkleIcon />
         <span className="t">Ask the timeline</span>
-        <span className="meta">{label}</span>
+        <span className="eve-badge">eve agent{busy ? ' · thinking' : ''}</span>
       </div>
 
-      <div className="chat-body" ref={bodyRef} role="log">
-        {turns.length === 0 && (
-          <div className="turn agent">
-            <div className="text">No questions in this window yet.</div>
-          </div>
+      {/* Scope: whole timeline vs the selected window */}
+      <div className="scope-switcher">
+        <button
+          className={`scope-option${scope === 'whole' ? ' active' : ''}`}
+          onClick={() => setScope('whole')}
+        >
+          <span className="scope-title">Whole timeline</span>
+          <span className="scope-sub">all windows in {label}</span>
+        </button>
+        <button
+          className={`scope-option${scope === 'window' ? ' active' : ''}`}
+          onClick={() => setScope('window')}
+          disabled={windowId == null}
+        >
+          <span className="scope-title">This window</span>
+          <span className="scope-sub">{windowId == null ? 'select a window' : `window #${windowId}`}</span>
+        </button>
+      </div>
+
+      <div className="chat-body">
+        {agent.data.messages.length === 0 && (
+          <div className="chat-empty">Ask why a shift happened — eve reads the messages in scope and cites them.</div>
         )}
-        {turns.map((turn) =>
-          turn.role === 'user' ? (
-            <div key={turn.id} className="turn user" data-status={turn.status}>
-              <div className="bubble">{turn.text}</div>
+
+        {agent.data.messages.map((message, mi) =>
+          message.role === 'user' ? (
+            <div key={mi} className="turn user">
+              <div className="bubble">{message.parts.map((p) => (p.type === 'text' ? p.text : '')).join('')}</div>
             </div>
           ) : (
-            <div key={turn.id} className="turn agent" data-status={turn.status}>
-              <div className="text">{turn.text}</div>
-              {turn.citations?.map((citation) => (
-                <button key={citation.label} className="citation">
-                  <span className="dot" />
-                  <span className="c-label">{citation.label}</span>
-                  <ChevronIcon />
-                </button>
-              ))}
+            <div key={mi} className="turn agent">
+              {message.parts.map((part, pi) => {
+                if (part.type === 'text') return <div key={pi} className="text">{part.text}</div>
+                if (part.type === 'dynamic-tool') {
+                  const { mark, color } = toolStateMark(part.state)
+                  return (
+                    <div key={pi} className="tool-row">
+                      <span className="tool-mark" style={{ color }}>{mark}</span>
+                      <span className="tool-name">{part.toolName}</span>
+                      {part.state === 'output-error' && <span className="tool-note">failed</span>}
+                    </div>
+                  )
+                }
+                return null
+              })}
             </div>
           ),
         )}
-        {isAsking && (
-          <div className="turn agent pending" role="status">
-            <div className="text">Reading the selected window...</div>
-          </div>
+
+        {agent.status === 'error' && (
+          <div className="chat-error">{agent.error?.message ?? 'The agent hit an error. Is the eve service running?'}</div>
         )}
       </div>
 
-      <form className="input-bar" onSubmit={ask}>
+      <form className="input-bar" onSubmit={submit}>
         <div className="field">
-          <textarea
-            placeholder="Ask about this conversation window..."
-            aria-label="Ask the timeline"
-            disabled={isAsking}
-            maxLength={1000}
-            onKeyDown={submitOnEnter}
-            ref={textareaRef}
-            rows={2}
+          <input
             value={draft}
-            onChange={(event) => setDraft(event.target.value)}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={scope === 'window' && windowId != null ? `Ask about window #${windowId}…` : 'Ask about the whole timeline…'}
+            aria-label="Ask the timeline"
           />
-          <span className={isOverMaxLength ? 'char-count over' : 'char-count'}>
-            {trimmedDraft.length}/1000
-          </span>
         </div>
-        <Button
-          className="send"
-          aria-label="Send"
-          type="submit"
-          disabled={!trimmedDraft || isAsking || isOverMaxLength}
-        >
+        <button className="send" type="submit" aria-label="Send" disabled={busy}>
           <SendIcon />
-        </Button>
+        </button>
       </form>
+
+      <div className="eve-footer">
+        <span className="dot" style={{ background: '#2EE6A6' }} />
+        durable eve session · streams tool calls · resumes mid-answer
+      </div>
     </section>
   )
 }

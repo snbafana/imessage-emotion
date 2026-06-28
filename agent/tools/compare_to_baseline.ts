@@ -3,8 +3,9 @@ import { z } from 'zod'
 import { getDb } from '../../src/lib/db/connection'
 import { getRunWindows } from '../../src/lib/api/runs'
 
+import { EKMAN_ANCHORS as EMOTIONS } from '../../src/lib/emotion/anchors'
+
 type Scores = Record<string, number>
-const EMOTIONS = ['warmth', 'joy', 'trust', 'stress', 'friction', 'sadness'] as const
 
 export default defineTool({
   description:

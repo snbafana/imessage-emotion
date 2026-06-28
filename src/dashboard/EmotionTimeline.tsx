@@ -1,14 +1,15 @@
 import type { EmotionKey, RunView, WindowView } from './data'
 import { EMOTIONS, gradientFor, runStateLabel, timelineBlocks } from './data'
+import { NEGATIVE_ANCHORS, POSITIVE_ANCHORS } from '../lib/emotion/anchors'
 
-const POSITIVE_EMOTIONS = new Set<EmotionKey>(['warmth', 'joy', 'trust'])
-
-// Per-window valence: positive emotions lift, tense ones drop. ~[-1, 1].
+// Per-window valence: joy lifts, anger/disgust/fear/sadness drop, neutral/
+// surprise are flat. ~[-1, 1].
 function windowValence(composition: { emotion: EmotionKey; weight: number }[]): number {
-  return composition.reduce(
-    (sum, { emotion, weight }) => sum + (POSITIVE_EMOTIONS.has(emotion) ? weight : -weight),
-    0,
-  )
+  return composition.reduce((sum, { emotion, weight }) => {
+    if (POSITIVE_ANCHORS.has(emotion)) return sum + weight
+    if (NEGATIVE_ANCHORS.has(emotion)) return sum - weight
+    return sum
+  }, 0)
 }
 
 // Smooth Catmull-Rom path through per-window valence (high-fidelity overlay on

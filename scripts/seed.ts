@@ -13,32 +13,42 @@ function dbPath(): string {
   return join(dir, 'imessage-emotion.sqlite')
 }
 
-type Scores = { warmth: number; joy: number; trust: number; stress: number; friction: number; sadness: number }
+type Scores = {
+  anger: number
+  disgust: number
+  fear: number
+  joy: number
+  neutral: number
+  sadness: number
+  surprise: number
+}
 const dominant = (s: Scores) =>
   (Object.entries(s).sort((a, b) => b[1] - a[1])[0][0]) as keyof Scores
 
-// 20-window arc: tentative blues -> red/violet conflict -> warming teal/gold.
+// 20-window Ekman arc: tentative (sadness/fear) -> conflict (anger/disgust/fear)
+// -> warming (joy). neutral/surprise as light filler.
+const z = { anger: 0.05, disgust: 0.03, fear: 0.05, joy: 0.05, neutral: 0.1, sadness: 0.05, surprise: 0.05 }
 const ARC: Scores[] = [
-  { warmth: 0.25, joy: 0.15, trust: 0.3, stress: 0.3, friction: 0.2, sadness: 0.5 },
-  { warmth: 0.3, joy: 0.2, trust: 0.35, stress: 0.28, friction: 0.18, sadness: 0.45 },
-  { warmth: 0.35, joy: 0.3, trust: 0.4, stress: 0.25, friction: 0.2, sadness: 0.35 },
-  { warmth: 0.5, joy: 0.45, trust: 0.5, stress: 0.2, friction: 0.15, sadness: 0.25 },
-  { warmth: 0.6, joy: 0.55, trust: 0.55, stress: 0.18, friction: 0.12, sadness: 0.2 },
-  { warmth: 0.5, joy: 0.4, trust: 0.5, stress: 0.35, friction: 0.3, sadness: 0.25 },
-  { warmth: 0.25, joy: 0.15, trust: 0.2, stress: 0.72, friction: 0.6, sadness: 0.35 },
-  { warmth: 0.2, joy: 0.12, trust: 0.18, stress: 0.78, friction: 0.68, sadness: 0.4 },
-  { warmth: 0.22, joy: 0.15, trust: 0.2, stress: 0.6, friction: 0.7, sadness: 0.38 },
-  { warmth: 0.3, joy: 0.2, trust: 0.28, stress: 0.4, friction: 0.4, sadness: 0.55 },
-  { warmth: 0.35, joy: 0.28, trust: 0.4, stress: 0.32, friction: 0.3, sadness: 0.45 },
-  { warmth: 0.55, joy: 0.5, trust: 0.55, stress: 0.22, friction: 0.18, sadness: 0.25 },
-  { warmth: 0.68, joy: 0.62, trust: 0.6, stress: 0.18, friction: 0.14, sadness: 0.18 },
-  { warmth: 0.62, joy: 0.55, trust: 0.65, stress: 0.2, friction: 0.16, sadness: 0.2 },
-  { warmth: 0.7, joy: 0.6, trust: 0.7, stress: 0.15, friction: 0.12, sadness: 0.15 },
-  { warmth: 0.78, joy: 0.7, trust: 0.72, stress: 0.12, friction: 0.1, sadness: 0.12 },
-  { warmth: 0.72, joy: 0.66, trust: 0.7, stress: 0.14, friction: 0.12, sadness: 0.14 },
-  { warmth: 0.82, joy: 0.74, trust: 0.78, stress: 0.1, friction: 0.08, sadness: 0.1 },
-  { warmth: 0.8, joy: 0.78, trust: 0.8, stress: 0.1, friction: 0.08, sadness: 0.1 },
-  { warmth: 0.85, joy: 0.8, trust: 0.82, stress: 0.08, friction: 0.06, sadness: 0.08 },
+  { ...z, sadness: 0.5, fear: 0.3, neutral: 0.25, joy: 0.15 },
+  { ...z, sadness: 0.45, fear: 0.25, neutral: 0.25, joy: 0.2 },
+  { ...z, sadness: 0.35, fear: 0.2, neutral: 0.3, joy: 0.32, surprise: 0.1 },
+  { ...z, joy: 0.5, neutral: 0.25, sadness: 0.2, surprise: 0.12 },
+  { ...z, joy: 0.6, neutral: 0.2, sadness: 0.15 },
+  { ...z, joy: 0.4, anger: 0.3, fear: 0.3, sadness: 0.25 },
+  { ...z, anger: 0.7, disgust: 0.4, fear: 0.45, sadness: 0.35, joy: 0.12 },
+  { ...z, anger: 0.78, disgust: 0.5, fear: 0.5, sadness: 0.4, joy: 0.1 },
+  { ...z, anger: 0.6, disgust: 0.45, fear: 0.4, sadness: 0.5, joy: 0.12 },
+  { ...z, sadness: 0.6, fear: 0.35, anger: 0.3, joy: 0.18 },
+  { ...z, sadness: 0.4, joy: 0.35, neutral: 0.2, fear: 0.2 },
+  { ...z, joy: 0.55, neutral: 0.2, sadness: 0.2 },
+  { ...z, joy: 0.68, neutral: 0.18, surprise: 0.12, sadness: 0.12 },
+  { ...z, joy: 0.62, neutral: 0.2, sadness: 0.14 },
+  { ...z, joy: 0.72, neutral: 0.15, sadness: 0.1 },
+  { ...z, joy: 0.8, neutral: 0.12, surprise: 0.12 },
+  { ...z, joy: 0.74, neutral: 0.14 },
+  { ...z, joy: 0.84, neutral: 0.1 },
+  { ...z, joy: 0.82, neutral: 0.1, surprise: 0.1 },
+  { ...z, joy: 0.88, neutral: 0.08 },
 ]
 
 const WARM = ['so good to see you', 'haha that made my day', 'thank you, really', 'love that', 'miss you', 'proud of you']
@@ -126,14 +136,14 @@ function seedRun(db: AppDatabase, conversationId: number, messageIds: number[]):
     const contextStart = Math.max(1, focalStart - 20)
     const contextEnd = focalStart - 1
     const dom = dominant(scores)
-    const tense = scores.stress + scores.friction
-    const warm = scores.warmth + scores.joy + scores.trust
+    const tense = scores.anger + scores.disgust + scores.fear
+    const warm = scores.joy
     const shift =
       k === 0
         ? { method: 'rolling-shift-v1', status: 'pending_baseline', strongest: [] }
         : {
             method: 'rolling-shift-v1',
-            status: tense > 1.1 ? 'major_shift' : warm > 1.8 ? 'major_shift' : 'stable',
+            status: tense > 1.0 ? 'major_shift' : warm > 0.7 ? 'major_shift' : 'stable',
             trend: tense > warm ? 'tenser' : 'warmer',
             strongest: [{ emotion: dom, delta: 0.3, direction: 'increase', label: `${dom} rising` }],
           }
