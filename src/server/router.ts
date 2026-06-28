@@ -8,6 +8,7 @@ import { searchContacts } from '@/lib/contacts/search'
 import { getRunWindows, listRuns } from '@/lib/api/runs'
 import { getWindowMessages } from '@/lib/api/messages'
 import { getLabelingWindow, listLabelingWindows, saveWindowLabel } from '@/lib/api/labels'
+import { exportAllLabeledWindows, exportLabeledWindow } from '@/lib/eval/harbor-export'
 import { createAxRun, finishAxRun } from '@/lib/emotion/run-analysis'
 import { EKMAN_ANCHORS } from '@/lib/emotion/anchors'
 import { answerConversation } from '@/lib/chat/answer'
@@ -108,6 +109,14 @@ export const appRouter = router({
   saveWindowLabel: publicProcedure
     .input(saveWindowLabelInput)
     .mutation(({ input }) => saveWindowLabel(getDb(), input)),
+
+  exportHarborTask: publicProcedure
+    .input(z.object({ windowId: z.number(), labeler: z.string().optional() }))
+    .mutation(({ input }) => exportLabeledWindow(getDb(), input.windowId, input.labeler)),
+
+  exportAllHarborTasks: publicProcedure
+    .input(z.object({ labeler: z.string().optional() }).optional())
+    .mutation(({ input }) => exportAllLabeledWindows(getDb(), input?.labeler)),
 
   createAnalysisRun: publicProcedure
     .input(z.object({ conversationId: z.number(), options: analysisOptions.optional() }))

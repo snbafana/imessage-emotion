@@ -88,6 +88,28 @@
   padding: 0 6px 16px;
 }
 
+.export-all-button {
+  width: calc(100% - 12px);
+  margin: 0 6px 12px;
+  min-height: 36px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.export-all-button:hover:not(:disabled) {
+  border-color: var(--ink);
+}
+
+.export-all-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .queue-stats span {
   display: flex;
   align-items: center;
