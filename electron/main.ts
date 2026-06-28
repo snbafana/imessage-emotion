@@ -2,8 +2,11 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { openAppDatabase, type AppDatabase } from '../src/lib/db/schema'
+import { answerConversation } from '../src/lib/chat/answer'
 import {
   API_CHANNELS,
+  type AskConversationInput,
+  type ConversationChatResponse,
   type SyncStatus,
 } from '../src/lib/api/types'
 import {
@@ -134,7 +137,19 @@ ipcMain.handle(API_CHANNELS.createBaselineRun, () => contractStub('createBaselin
 ipcMain.handle(API_CHANNELS.listRuns, () => contractStub('listRuns'))
 ipcMain.handle(API_CHANNELS.getRunWindows, () => contractStub('getRunWindows'))
 ipcMain.handle(API_CHANNELS.getWindowMessages, () => contractStub('getWindowMessages'))
-ipcMain.handle(API_CHANNELS.askConversation, () => contractStub('askConversation'))
+ipcMain.handle(
+  API_CHANNELS.askConversation,
+  (_event, input: AskConversationInput): ConversationChatResponse => {
+    if (!db) throw new Error('Database is not open')
+
+    return answerConversation(db, {
+      conversationId: input.conversationId,
+      runId: input.runId,
+      windowId: input.windowId,
+      question: input.question,
+    })
+  },
+)
 
 app.whenReady().then(() => {
   startAppServices()

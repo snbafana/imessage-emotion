@@ -128,10 +128,11 @@ export interface ChatTurn {
 export interface AskConversationInput {
   conversationId: number
   question: string
-  runId?: number
-  windowId?: number
-  history?: ChatTurn[]
+  runId: number
+  windowId: number
 }
+
+export type ConversationChatResponse = import('../chat/answer').ConversationChatResponse
 
 export interface ImessageEmotionApi {
   getSyncStatus(): Promise<SyncStatus>
@@ -143,5 +144,5 @@ export interface ImessageEmotionApi {
   listRuns(conversationId: number): Promise<RunSummary[]>
   getRunWindows(runId: number): Promise<AnalysisWindow[]>
   getWindowMessages(windowId: number, slice?: WindowMessageSlice): Promise<WindowMessage[]>
-  askConversation(input: AskConversationInput): Promise<ChatTurn>
+  askConversation(input: AskConversationInput): Promise<ConversationChatResponse>
 }
