@@ -16,6 +16,14 @@ release
 .smoke-dashboard-real
 
 # Editor directories and files
+
+# Local SQLite benchmark artifacts
+experiments/sqlite-latency/tmp/
+experiments/sqlite-latency/results/
+experiments/sqlite-latency/target/
+experiments/sqlite-latency/rust/target/
+
+# Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
