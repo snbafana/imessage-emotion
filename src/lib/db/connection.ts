@@ -6,7 +6,7 @@ import { openAppDatabase, type AppDatabase } from './schema'
 
 // The app's own synced SQLite DB (NOT Apple's chat.db, which the importer reads).
 // Override with IMESSAGE_EMOTION_DB_PATH.
-function resolveDbPath(): string {
+export function resolveDbPath(): string {
   const override = process.env.IMESSAGE_EMOTION_DB_PATH
   if (override) return override
   const dir = join(homedir(), 'Library', 'Application Support', 'imessage-emotion')

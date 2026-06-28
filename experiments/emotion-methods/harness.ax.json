@@ -1,8 +1,10 @@
 {
   "runName": "ax-provider-selected-window-benchmark",
   "dataset": {
-    "kind": "private",
-    "privateConversationLimit": 2,
+    "kind": "native",
+    "nativeConversationLimit": 2,
+    "nativeConversationOrder": "recent",
+    "minMessagesPerConversation": 24,
     "maxMessagesPerConversation": 600
   },
   "windowing": [

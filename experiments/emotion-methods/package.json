@@ -8,6 +8,7 @@
     "harness:ax:large": "tsx harness_ax.ts --config harness.ax.large.json --out out/harness-ax-large-results.json",
     "harness:ax:conversation": "tsx harness_ax.ts --config harness.ax.conversation.json --out out/harness-ax-conversation-results.json",
     "harness:ax:top5": "tsx harness_ax.ts --config harness.ax.top5.json --out out/harness-ax-top5-results.json",
+    "harness:ax:native-smoke": "tsx harness_ax.ts --config harness.ax.native-smoke.json --out out/native-db-smoke.json --no-provider",
     "graphs:ax": "uv run python plot_ax_results.py --input out/harness-ax-large-results.json --out-dir out/graphs",
     "graphs:top5": "uv run python plot_ax_results.py --input out/harness-ax-top5-results.json --out-dir out/graphs/top5",
     "graph:conversation": "uv run python plot_conversation_heatmap.py --input out/harness-ax-large-results.json --conversation private_c01 --source deterministic --method roberta_emotion --window-size 16 --stride 8 --chart line --out out/graphs/private_c01_emotion_line.png",
