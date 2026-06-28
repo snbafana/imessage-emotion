@@ -12,7 +12,7 @@ export const API_CHANNELS = {
 } as const
 
 export type ApiMethodName = keyof typeof API_CHANNELS
-
+export type JsonRecord = Record<string, unknown>
 export type SyncPhase = 'idle' | 'syncing' | 'error' | 'stopped'
 
 export interface SyncStatus {
@@ -33,33 +33,44 @@ export interface SyncStatus {
 
 export interface ConversationSummary {
   id: number
+  sourceChatId: number
+  chatIdentifier: string
   title: string
+  isGroup: boolean
   participantSummary: string
+  participantCount: number
   messageCount: number
   firstMessageAt: number | null
   lastMessageAt: number | null
-  latestRun?: RunSummary
+  latestRun?: RunSummary | null
+}
+
+export interface ConversationParticipant {
+  id: number
+  handle: string
+  handleIdentifier: string
+  normalizedHandle: string
+  service: string
+  displayName: string | null
 }
 
 export interface ConversationDetail extends ConversationSummary {
-  participants: Array<{
-    id: number
-    displayName: string | null
-    handle: string
-  }>
+  participants: ConversationParticipant[]
   runs: RunSummary[]
 }
+
+export type RunStatus = 'pending' | 'running' | 'completed' | 'error'
 
 export interface RunSummary {
   id: number
   conversationId: number
   methodKey: string
-  status: 'pending' | 'running' | 'completed' | 'error'
+  status: RunStatus
   windowCount: number
   startedAt: number
   completedAt: number | null
-  summary: Record<string, unknown>
-  error?: string
+  summary: JsonRecord
+  error?: string | null
 }
 
 export interface WindowResult {
@@ -86,17 +97,21 @@ export interface AnalysisWindow {
   messageCount: number
   contextMessageCount: number
   focalMessageCount: number
-  status: 'pending' | 'running' | 'completed' | 'error'
+  metadata: JsonRecord
+  status: RunStatus
   result: WindowResult
-  shift: Record<string, unknown>
+  shift: JsonRecord
   latencyMs: number | null
-  error?: string
+  error?: string | null
+  createdAt: number
 }
 
 export interface WindowMessage {
   id: number
   conversationId: number
   conversationOrdinal: number
+  sourceRowid: number
+  guid: string
   senderContactId: number | null
   senderName: string | null
   text: string | null
@@ -104,6 +119,8 @@ export interface WindowMessage {
   isFromMe: boolean
   isRead: boolean
   hasAttachments: boolean
+  status: string
+  slice: WindowMessageSlice
 }
 
 export interface BaselineRunOptions {
@@ -113,7 +130,13 @@ export interface BaselineRunOptions {
   mode?: 'absolute-message-count' | 'comparative-message-count'
 }
 
-export type WindowMessageSlice = 'all' | 'context' | 'focal'
+export type WindowMessageSlice = 'all' | 'full' | 'context' | 'focal'
+
+export interface WindowMessagesResult {
+  window: AnalysisWindow
+  slice: WindowMessageSlice
+  messages: WindowMessage[]
+}
 
 export interface ChatTurn {
   role: 'user' | 'assistant'
@@ -138,7 +161,7 @@ export interface ImessageEmotionApi {
   syncMessagesNow(): Promise<SyncStatus>
   syncContactsNow(): Promise<SyncStatus>
   listConversations(): Promise<ConversationSummary[]>
-  getConversation(conversationId: number): Promise<ConversationDetail>
+  getConversation(conversationId: number): Promise<ConversationDetail | null>
   createBaselineRun(conversationId: number, options?: BaselineRunOptions): Promise<RunSummary>
   listRuns(conversationId: number): Promise<RunSummary[]>
   getRunWindows(runId: number): Promise<AnalysisWindow[]>

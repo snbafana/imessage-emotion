@@ -2,6 +2,10 @@ import { app, BrowserWindow, ipcMain } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { openAppDatabase, type AppDatabase } from '../src/lib/db/schema'
+import { getConversation, listConversations } from '../src/lib/api/conversations'
+import { getWindowMessages } from '../src/lib/api/messages'
+import { getRunWindows, listRuns } from '../src/lib/api/runs'
+import type { WindowMessageSlice } from '../src/lib/api/types'
 import {
   API_CHANNELS,
   type SyncStatus,
@@ -85,6 +89,11 @@ function startAppServices() {
   })
 }
 
+function requireDatabase(): AppDatabase {
+  if (!db) throw new Error('Database is not ready')
+  return db
+}
+
 function createWindow() {
   win = new BrowserWindow({
     icon: path.join(process.env.VITE_PUBLIC, 'electron-vite.svg'),
@@ -128,12 +137,22 @@ ipcMain.handle(API_CHANNELS.syncContactsNow, async () => {
   lastContactsStatus = await (contactsSync?.syncNow() ?? Promise.resolve(lastContactsStatus))
   return getSyncStatus()
 })
-ipcMain.handle(API_CHANNELS.listConversations, () => contractStub('listConversations'))
-ipcMain.handle(API_CHANNELS.getConversation, () => contractStub('getConversation'))
+ipcMain.handle(API_CHANNELS.listConversations, () => listConversations(requireDatabase()))
+ipcMain.handle(API_CHANNELS.getConversation, (_event, conversationId: number) =>
+  getConversation(requireDatabase(), conversationId),
+)
 ipcMain.handle(API_CHANNELS.createBaselineRun, () => contractStub('createBaselineRun'))
-ipcMain.handle(API_CHANNELS.listRuns, () => contractStub('listRuns'))
-ipcMain.handle(API_CHANNELS.getRunWindows, () => contractStub('getRunWindows'))
-ipcMain.handle(API_CHANNELS.getWindowMessages, () => contractStub('getWindowMessages'))
+ipcMain.handle(API_CHANNELS.listRuns, (_event, conversationId: number) =>
+  listRuns(requireDatabase(), conversationId),
+)
+ipcMain.handle(API_CHANNELS.getRunWindows, (_event, runId: number) =>
+  getRunWindows(requireDatabase(), runId),
+)
+ipcMain.handle(
+  API_CHANNELS.getWindowMessages,
+  (_event, windowId: number, slice: WindowMessageSlice = 'all') =>
+    getWindowMessages(requireDatabase(), windowId, slice),
+)
 ipcMain.handle(API_CHANNELS.askConversation, () => contractStub('askConversation'))
 
 app.whenReady().then(() => {
