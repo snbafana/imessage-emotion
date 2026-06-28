@@ -132,8 +132,21 @@
   background: var(--hair-soft);
 }
 
+.queue-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.queue-item:disabled:hover {
+  background: transparent;
+}
+
 .queue-item[data-selected] {
   border-color: #d9e1ff;
+  background: #f2f5ff;
+}
+
+.queue-item[data-selected]:disabled:hover {
   background: #f2f5ff;
 }
 

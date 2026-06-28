@@ -112,6 +112,7 @@ export default function LabelingPage() {
 
   async function saveLabel() {
     if (!detail || saving) return
+    const existingLabel = detail.label
     setSaving(true)
     setSaveStatus(null)
     try {
@@ -119,16 +120,18 @@ export default function LabelingPage() {
         windowId: detail.window.id,
         dominant: draft.dominant || null,
         acceptableDominants: draft.acceptableDominants,
-        scores: {},
+        scores: existingLabel?.scores ?? {},
         requiresContext: draft.requiresContext,
         sarcasmOrSubtext: draft.sarcasmOrSubtext,
         ambiguity: draft.ambiguous ? 'high' : null,
-        stateLabel: null,
-        evidenceMessageRefs: [],
-        pivotalMessageRefs: [],
+        stateLabel: existingLabel?.stateLabel ?? null,
+        evidenceMessageRefs: existingLabel?.evidenceMessageRefs ?? [],
+        pivotalMessageRefs: existingLabel?.pivotalMessageRefs ?? [],
         notes: draft.notes,
       })
-      setDetail({ ...detail, label: saved })
+      setDetail((current) =>
+        current?.window.id === saved.windowId ? { ...current, label: saved } : current,
+      )
       setWindows((current) =>
         current.map((item) =>
           item.window.id === saved.windowId ? { ...item, label: saved } : item,
@@ -187,6 +190,7 @@ export default function LabelingPage() {
               className="queue-item"
               data-selected={item.window.id === selectedWindowId || undefined}
               data-labeled={item.label != null || undefined}
+              disabled={saving}
               onClick={() => setSelectedWindowId(item.window.id)}
             >
               <span className="queue-title">{item.conversation.title}</span>
@@ -212,17 +216,25 @@ export default function LabelingPage() {
             </p>
           </div>
           <div className="labeling-actions">
-            <button type="button" onClick={() => selectOffset(-1)} disabled={selectedIndex <= 0}>
+            <button
+              type="button"
+              onClick={() => selectOffset(-1)}
+              disabled={saving || selectedIndex <= 0}
+            >
               Previous
             </button>
             <button
               type="button"
               onClick={() => selectOffset(1)}
-              disabled={selectedIndex < 0 || selectedIndex >= windows.length - 1}
+              disabled={saving || selectedIndex < 0 || selectedIndex >= windows.length - 1}
             >
               Next
             </button>
-            <button type="button" onClick={selectNextUnlabeled} disabled={unlabeledCount === 0}>
+            <button
+              type="button"
+              onClick={selectNextUnlabeled}
+              disabled={saving || unlabeledCount === 0}
+            >
               Next open
             </button>
           </div>

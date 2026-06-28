@@ -105,11 +105,32 @@ describe('window labels api', () => {
     expect(saved.evidenceMessageRefs).toEqual([evidenceId])
     expect(saved.pivotalMessageRefs).toEqual([pivotalId])
 
+    const resaved = saveWindowLabel(db, {
+      windowId: summary.window.id,
+      dominant: 'neutral',
+      acceptableDominants: ['neutral'],
+      scores: saved.scores,
+      requiresContext: false,
+      sarcasmOrSubtext: false,
+      ambiguity: null,
+      stateLabel: saved.stateLabel,
+      evidenceMessageRefs: saved.evidenceMessageRefs,
+      pivotalMessageRefs: saved.pivotalMessageRefs,
+      notes: 'Updated qualitative label.',
+    })
+
+    expect(resaved.dominant).toBe('neutral')
+    expect(resaved.scores).toEqual({ sadness: 0.85, neutral: 0.25 })
+    expect(resaved.stateLabel).toBe('distant but not hostile')
+    expect(resaved.evidenceMessageRefs).toEqual([evidenceId])
+    expect(resaved.pivotalMessageRefs).toEqual([pivotalId])
+    expect(resaved.notes).toBe('Updated qualitative label.')
+
     const labeledSummary = listLabelingWindows(db, { limit: 10 }).find(
       (item) => item.window.id === summary.window.id,
     )
     expect(labeledSummary).toBeDefined()
-    expect(labeledSummary?.label?.dominant).toBe('sadness')
+    expect(labeledSummary?.label?.dominant).toBe('neutral')
     expect(getLabelingWindow(db, summary.window.id)?.label?.stateLabel).toBe(
       'distant but not hostile',
     )
