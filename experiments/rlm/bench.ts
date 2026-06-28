@@ -125,7 +125,7 @@ async function main() {
   {
     const run = freshRun(db, conversationId, focal, stride)
     const t0 = performance.now()
-    const r = await scoreRunTwoTier(db, run.runId, { topK, batchSize: 10, subConcurrency: CONCURRENCY })
+    const r = await scoreRunTwoTier(db, run.runId, { topK, subConcurrency: CONCURRENCY })
     const wallMs = Math.round(performance.now() - t0)
     rows.push({
       method: `Two-tier (top-${topK})`,

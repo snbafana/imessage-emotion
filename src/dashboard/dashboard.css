@@ -1595,6 +1595,17 @@
   font-size: 12px;
   color: var(--faint);
 }
+.cr-summary {
+  margin: 0 28px 4px;
+  padding: 12px 16px;
+  background: var(--cobalt-bg);
+  border: 1px solid var(--cobalt-border);
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  flex-shrink: 0;
+}
 .cr-card {
   display: flex;
   flex-direction: column;

@@ -3,9 +3,12 @@ import { withEve } from 'eve/next'
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // better-sqlite3 is a native module; never bundle it.
+  // Native / heavy server-only modules must never be bundled: better-sqlite3,
+  // and the RoBERTa stack (onnxruntime-node) used by the two-tier route.
   experimental: {
-    serverComponentsExternalPackages: ['better-sqlite3'],
+    // @ax-llm/ax must stay external too: its AxJSRuntime imports node:worker_threads
+    // at runtime, which a webpack bundle can't resolve.
+    serverComponentsExternalPackages: ['better-sqlite3', '@huggingface/transformers', 'onnxruntime-node', '@ax-llm/ax'],
   },
 }
 
