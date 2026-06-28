@@ -28,7 +28,6 @@ process.env.APP_ROOT = path.join(__dirname, '..')
 
 // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
-export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
 export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
@@ -37,7 +36,7 @@ let win: BrowserWindow | null
 let db: AppDatabase | null = null
 let imessageSync: IMessageSyncController | null = null
 let contactsSync: ContactsSyncController | null = null
-let lastSyncStatus: IMessageSyncStatus = {
+let lastImessageStatus: IMessageSyncStatus = {
   state: 'idle',
   cursor: 0,
   importedMessages: 0,
@@ -57,7 +56,7 @@ function startAppServices() {
   imessageSync = startIMessageSync(db, {
     pollIntervalMs: IMESSAGE_SYNC_INTERVAL_MS,
     onStatus(status) {
-      lastSyncStatus = status
+      lastImessageStatus = status
       win?.webContents.send('imessage-sync-status', status)
     },
   })
@@ -109,8 +108,8 @@ app.on('activate', () => {
   }
 })
 
-ipcMain.handle('imessage-sync-status', () => lastSyncStatus)
-ipcMain.handle('imessage-sync-now', async () => imessageSync?.syncNow() ?? lastSyncStatus)
+ipcMain.handle('imessage-sync-status', () => lastImessageStatus)
+ipcMain.handle('imessage-sync-now', async () => imessageSync?.syncNow() ?? lastImessageStatus)
 ipcMain.handle('contacts-sync-status', () => lastContactsStatus)
 ipcMain.handle('contacts-sync-now', async () => contactsSync?.syncNow() ?? lastContactsStatus)
 

@@ -11,21 +11,3 @@ export function normalizeHandleForStorage(identifier: string): string {
   if (trimmed.includes('@')) return trimmed.toLowerCase()
   return toE164(trimmed) ?? normalizePhone(trimmed) ?? trimmed
 }
-
-export function buildHandleCandidates(identifier: string): string[] {
-  const trimmed = identifier.trim()
-  if (trimmed.length === 0) return []
-  if (trimmed.includes('@')) return [trimmed.toLowerCase()]
-
-  const candidates = new Set<string>()
-  const normalized = normalizePhone(trimmed)
-  const e164 = toE164(trimmed)
-  candidates.add(trimmed)
-  if (normalized) {
-    candidates.add(normalized)
-    if (!normalized.startsWith('+')) candidates.add(`+${normalized}`)
-    if (normalized.length === 10) candidates.add(`+1${normalized}`)
-  }
-  if (e164) candidates.add(e164)
-  return [...candidates].filter((candidate) => candidate.length > 0)
-}

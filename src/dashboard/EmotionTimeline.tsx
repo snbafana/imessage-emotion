@@ -34,9 +34,9 @@ export default function EmotionTimeline({
 
       <div className="chart">
         <div className="plot">
-          <div className="gridline" style={{ top: 0 }} />
-          <div className="gridline" style={{ top: 70 }} />
-          <div className="gridline" style={{ top: 140 }} />
+          {[0, 70, 140].map((top) => (
+            <div key={top} className="gridline" style={{ top }} />
+          ))}
 
           {TIMELINE.map((b, i) => (
             <div
@@ -56,22 +56,20 @@ export default function EmotionTimeline({
               preserveAspectRatio="none"
               fill="none"
             >
-              <path
-                d={VALENCE_PATH}
-                stroke="#fff"
-                strokeWidth={6}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-              />
-              <path
-                d={VALENCE_PATH}
-                stroke="#0a0a0b"
-                strokeWidth={2.25}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-              />
+              {[
+                { stroke: '#fff', strokeWidth: 6 },
+                { stroke: '#0a0a0b', strokeWidth: 2.25 },
+              ].map((p) => (
+                <path
+                  key={p.stroke}
+                  d={VALENCE_PATH}
+                  stroke={p.stroke}
+                  strokeWidth={p.strokeWidth}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
             </svg>
           </div>
         </div>

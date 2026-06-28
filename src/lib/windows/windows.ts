@@ -1,6 +1,6 @@
 import type { AppDatabase } from '../db/schema'
 
-export interface WindowConfigInput {
+interface WindowConfigInput {
   name: string
   messageCount: number
   stride: number
@@ -155,8 +155,17 @@ export function ensureWindowsForConversation(
 
     const windowIds: number[] = []
     for (const range of ranges) {
-      const start = boundaryStatement.get(conversationId, range.startOrdinal) as MessageBoundary
-      const end = boundaryStatement.get(conversationId, range.endOrdinal) as MessageBoundary
+      const start = boundaryStatement.get(conversationId, range.startOrdinal) as
+        | MessageBoundary
+        | undefined
+      const end = boundaryStatement.get(conversationId, range.endOrdinal) as
+        | MessageBoundary
+        | undefined
+      if (!start || !end) {
+        throw new Error(
+          `Missing message boundary for conversation ${conversationId} ordinals ${range.startOrdinal}-${range.endOrdinal}`,
+        )
+      }
       const key = [
         'conversation',
         conversationId,
