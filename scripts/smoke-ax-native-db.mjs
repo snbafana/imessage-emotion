@@ -39,6 +39,10 @@ const result = spawnSync(
   {
     cwd: resolve('.'),
     encoding: 'utf8',
+    env: {
+      ...process.env,
+      IMESSAGE_EMOTION_DB_PATH: dbPath,
+    },
     maxBuffer: 10 * 1024 * 1024,
   },
 )
@@ -58,6 +62,10 @@ assert(output.noProvider === true, 'native DB smoke must run without provider ca
 assert(source?.counts && Number.isInteger(source.counts.messages), 'smoke output must include app DB counts')
 assert(!JSON.stringify(output).includes('windowText'), 'smoke output must not persist private prompt text')
 assert(packetRows.every((row) => row.dryRun === true), 'all smoke rows must be packet-only dry runs')
+assert(
+  packetRows.every((row) => row.messageCount >= 4 && row.messageCount <= 8),
+  'smoke packets must use the requested native smoke window shape',
+)
 
 if (source.counts.messages > 0) {
   assert(packetRows.length > 0, 'app DB has messages but no Ax score packets were built')

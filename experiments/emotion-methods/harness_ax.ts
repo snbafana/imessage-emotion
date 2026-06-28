@@ -34,6 +34,7 @@ type Conversation = {
   messages: Message[];
   nativeWindows?: Window[];
   nativeRunId?: number;
+  nativeWindowConfig?: Record<string, unknown>;
 };
 
 type Window = {
@@ -541,6 +542,7 @@ function nativeConversations(config: NonNullable<Config["dataset"]>): LoadedData
         messages: selectNativeMessages(db, row.id, maxMessages),
         nativeWindows,
         nativeRunId: run?.id,
+        nativeWindowConfig: run?.windowConfig,
       };
     });
 
@@ -630,10 +632,24 @@ function rangeOrdinals(start: number, end: number): number[] {
 
 function windowsForConversation(conversation: Conversation, spec: { size: number; stride: number }): Window[] {
   if (conversation.kind === "native") {
-    if (conversation.nativeWindows && conversation.nativeWindows.length > 0) return conversation.nativeWindows;
+    if (
+      conversation.nativeWindows &&
+      conversation.nativeWindows.length > 0 &&
+      nativeWindowConfigMatches(conversation.nativeWindowConfig, spec)
+    ) {
+      return conversation.nativeWindows;
+    }
     return makeNativePlannedWindows(conversation.messages, spec.size, spec.stride);
   }
   return makeWindows(conversation.messages, spec.size, spec.stride);
+}
+
+function nativeWindowConfigMatches(
+  config: Record<string, unknown> | undefined,
+  spec: { size: number; stride: number },
+): boolean {
+  if (!config) return false;
+  return Number(config.focalMessages) === spec.size && Number(config.stride) === spec.stride;
 }
 
 function windowRef(conversationId: string, window: Window) {
@@ -1211,12 +1227,16 @@ type ParsedLlmScore = {
   confidence: number;
   stateLabel: string | null;
   reasoningSummary: string | null;
-  uncertainty: { level: string; reason: string } | null;
-  priorComparison: { summary: string; largestDeltaEmotion: Anchor; largestDelta: number } | null;
+  uncertainty: { level: string; reason: string | null } | null;
+  priorComparison: { summary: string | null; largestDeltaEmotion: Anchor; largestDelta: number } | null;
   evidence: SelectedWindow["messageRefs"];
 };
 
-function parseResultJson(value: unknown, window: SelectedWindow): ParsedLlmScore {
+function parseResultJson(
+  value: unknown,
+  window: SelectedWindow,
+  allowPrivateOutput: boolean,
+): ParsedLlmScore {
   const text = typeof value === "string" ? value : JSON.stringify(value);
   const parsed = JSON.parse(text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")) as Record<string, unknown>;
   const rawScores = (parsed.scores && typeof parsed.scores === "object" ? parsed.scores : {}) as Record<string, unknown>;
@@ -1230,10 +1250,10 @@ function parseResultJson(value: unknown, window: SelectedWindow): ParsedLlmScore
     scores,
     dominant: dominantValue,
     confidence: clampNumber(parsed.confidence),
-    stateLabel: typeof parsed.stateLabel === "string" ? parsed.stateLabel.slice(0, 80) : null,
-    reasoningSummary: typeof parsed.reasoningSummary === "string" ? parsed.reasoningSummary.slice(0, 220) : null,
-    uncertainty: sanitizeUncertainty(parsed.uncertainty),
-    priorComparison: sanitizePriorComparison(parsed.priorComparison),
+    stateLabel: safeProviderText(parsed.stateLabel, 80, allowPrivateOutput),
+    reasoningSummary: safeProviderText(parsed.reasoningSummary, 220, allowPrivateOutput),
+    uncertainty: sanitizeUncertainty(parsed.uncertainty, allowPrivateOutput),
+    priorComparison: sanitizePriorComparison(parsed.priorComparison, allowPrivateOutput),
     evidence,
   };
 }
@@ -1251,30 +1271,46 @@ function sanitizeEvidence(value: unknown, window: SelectedWindow): SelectedWindo
   });
 }
 
-function sanitizeUncertainty(value: unknown): ParsedLlmScore["uncertainty"] {
+function safeProviderText(value: unknown, maxLength: number, allowPrivateOutput: boolean): string | null {
+  if (!allowPrivateOutput || typeof value !== "string") return null;
+  return value.slice(0, maxLength);
+}
+
+function sanitizeUncertainty(
+  value: unknown,
+  allowPrivateOutput: boolean,
+): ParsedLlmScore["uncertainty"] {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
   const level = typeof row.level === "string" ? row.level : "medium";
   return {
     level: ["low", "medium", "high"].includes(level) ? level : "medium",
-    reason: typeof row.reason === "string" ? row.reason.slice(0, 160) : "",
+    reason: safeProviderText(row.reason, 160, allowPrivateOutput),
   };
 }
 
-function sanitizePriorComparison(value: unknown): ParsedLlmScore["priorComparison"] {
+function sanitizePriorComparison(
+  value: unknown,
+  allowPrivateOutput: boolean,
+): ParsedLlmScore["priorComparison"] {
   if (!value || typeof value !== "object") return null;
   const row = value as Record<string, unknown>;
   const emotion = typeof row.largestDeltaEmotion === "string" && (ANCHORS as readonly string[]).includes(row.largestDeltaEmotion)
     ? row.largestDeltaEmotion as Anchor
     : "neutral";
   return {
-    summary: typeof row.summary === "string" ? row.summary.slice(0, 180) : "",
+    summary: safeProviderText(row.summary, 180, allowPrivateOutput),
     largestDeltaEmotion: emotion,
     largestDelta: Math.max(-1, Math.min(1, round(Number(row.largestDelta) || 0))),
   };
 }
 
-async function scoreSelectedWindow(config: LlmConfig, service: ReturnType<typeof axService>, window: SelectedWindow) {
+async function scoreSelectedWindow(
+  config: LlmConfig,
+  service: ReturnType<typeof axService>,
+  window: SelectedWindow,
+  allowPrivateOutput: boolean,
+) {
   const started = performance.now();
   const output = await scoreWindowWithAx.forward(service, {
     taskContext: taskContext(),
@@ -1284,7 +1320,7 @@ async function scoreSelectedWindow(config: LlmConfig, service: ReturnType<typeof
     windowText: window.text,
   });
   const latencyMs = round(performance.now() - started);
-  const parsed = parseResultJson(output.resultJson, window);
+  const parsed = parseResultJson(output.resultJson, window, allowPrivateOutput);
   const outputTokens = estimatedTokens(String(output.resultJson ?? "").length);
   const inputTokens = estimatedTokens(window.inputChars);
   return {
@@ -1314,6 +1350,7 @@ async function runLlm(
   selection: NonNullable<Config["selection"]>,
   configs: LlmConfig[],
   noProvider: boolean,
+  allowPrivateOutput: boolean,
 ) {
   const results = [];
   for (const config of configs) {
@@ -1337,7 +1374,7 @@ async function runLlm(
           estimatedCostUsd: null,
           completionMs: round(performance.now() - started),
         }))
-      : await providerRows(config, windows, started);
+      : await providerRows(config, windows, started, allowPrivateOutput);
     const ok = rows.filter((row): row is Extract<LlmRow, { ok: true }> => row.ok);
     const providerOk = ok.filter((row): row is Extract<LlmRow, { ok: true; dryRun?: never }> => !("dryRun" in row));
     const latencies = providerOk.map((row) => Number(row.latencyMs ?? 0));
@@ -1418,13 +1455,14 @@ async function providerRows(
   config: LlmConfig,
   windows: SelectedWindow[],
   started: number,
+  allowPrivateOutput: boolean,
 ): Promise<LlmRow[]> {
   const service = axService(config);
   return mapLimit(windows, config.concurrency ?? 4, async (window): Promise<LlmRow> => {
     try {
       return {
         ok: true,
-        ...(await scoreSelectedWindow(config, service, window)),
+        ...(await scoreSelectedWindow(config, service, window, allowPrivateOutput)),
         completionMs: round(performance.now() - started),
       };
     } catch (error) {
@@ -1511,7 +1549,15 @@ async function main() {
   const deterministic = await runDeterministic(conversations, windowing, deterministicNames, includeWindowText);
   const selection = config.selection ?? {};
   const selectedWindows = selectWindows(conversations, windowing[0] ?? { size: 8, stride: 4 }, selection, deterministic);
-  const llm = await runLlm(conversations, deterministic, windowing, selection, config.llm ?? [], args.noProvider);
+  const llm = await runLlm(
+    conversations,
+    deterministic,
+    windowing,
+    selection,
+    config.llm ?? [],
+    args.noProvider,
+    args.allowPrivateOutput,
+  );
 
   const result = {
     generatedAt: new Date().toISOString(),
