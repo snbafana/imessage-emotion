@@ -95,14 +95,26 @@ export interface ConversationDetail extends ConversationSummary {
 
 export type RunStatus = 'pending' | 'running' | 'completed' | 'error'
 
+export interface RunWindowConfigMetadata {
+  mode?: 'absolute-message-count' | 'comparative-message-count'
+  contextMessages?: number
+  focalMessages?: number
+  stride?: number
+  minFocalMessages?: number
+  [key: string]: unknown
+}
+
 export interface RunSummary {
   id: number
   conversationId: number
   methodKey: string
   status: RunStatus
   windowCount: number
+  scoredWindowCount?: number
   startedAt: number
   completedAt: number | null
+  windowConfig?: RunWindowConfigMetadata | Record<string, unknown>
+  scorerConfig?: Record<string, unknown>
   summary: RunSummaryMetadata | Record<string, unknown>
   summaryJson?: Record<string, unknown>
   error?: string | null
