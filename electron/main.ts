@@ -3,6 +3,10 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { openAppDatabase, type AppDatabase } from '../src/lib/db/schema'
 import {
+  API_CHANNELS,
+  type SyncStatus,
+} from '../src/lib/api/types'
+import {
   startContactsSync,
   type ContactsSyncController,
   type ContactsSyncStatus,
@@ -51,6 +55,17 @@ let lastContactsStatus: ContactsSyncStatus = {
 const IMESSAGE_SYNC_INTERVAL_MS = 30_000
 const CONTACTS_SYNC_INTERVAL_MS = 10 * 60 * 1000
 
+function getSyncStatus(): SyncStatus {
+  return {
+    messages: lastSyncStatus,
+    contacts: lastContactsStatus,
+  }
+}
+
+function contractStub(method: string): never {
+  throw new Error(`${method} is not implemented yet`)
+}
+
 function startAppServices() {
   const dbPath = path.join(app.getPath('userData'), 'imessage-emotion.sqlite')
   db = openAppDatabase(dbPath)
@@ -76,11 +91,6 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, 'preload.mjs'),
     },
-  })
-
-  // Test active push message to Renderer-process.
-  win.webContents.on('did-finish-load', () => {
-    win?.webContents.send('main-process-message', (new Date).toLocaleString())
   })
 
   if (VITE_DEV_SERVER_URL) {
@@ -109,10 +119,22 @@ app.on('activate', () => {
   }
 })
 
-ipcMain.handle('imessage-sync-status', () => lastSyncStatus)
-ipcMain.handle('imessage-sync-now', async () => imessageSync?.syncNow() ?? lastSyncStatus)
-ipcMain.handle('contacts-sync-status', () => lastContactsStatus)
-ipcMain.handle('contacts-sync-now', async () => contactsSync?.syncNow() ?? lastContactsStatus)
+ipcMain.handle(API_CHANNELS.getSyncStatus, () => getSyncStatus())
+ipcMain.handle(API_CHANNELS.syncMessagesNow, async () => {
+  lastSyncStatus = await (imessageSync?.syncNow() ?? Promise.resolve(lastSyncStatus))
+  return getSyncStatus()
+})
+ipcMain.handle(API_CHANNELS.syncContactsNow, async () => {
+  lastContactsStatus = await (contactsSync?.syncNow() ?? Promise.resolve(lastContactsStatus))
+  return getSyncStatus()
+})
+ipcMain.handle(API_CHANNELS.listConversations, () => contractStub('listConversations'))
+ipcMain.handle(API_CHANNELS.getConversation, () => contractStub('getConversation'))
+ipcMain.handle(API_CHANNELS.createBaselineRun, () => contractStub('createBaselineRun'))
+ipcMain.handle(API_CHANNELS.listRuns, () => contractStub('listRuns'))
+ipcMain.handle(API_CHANNELS.getRunWindows, () => contractStub('getRunWindows'))
+ipcMain.handle(API_CHANNELS.getWindowMessages, () => contractStub('getWindowMessages'))
+ipcMain.handle(API_CHANNELS.askConversation, () => contractStub('askConversation'))
 
 app.whenReady().then(() => {
   startAppServices()
