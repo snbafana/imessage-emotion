@@ -35,3 +35,6 @@ experiments/sqlite-latency/rust/target/
 *.sqlite-shm
 *.sqlite-wal
 .data/
+
+# native (Swift) build artifacts
+native/**/.build/
