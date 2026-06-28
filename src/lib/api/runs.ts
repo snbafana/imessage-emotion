@@ -1,5 +1,5 @@
 import type { AppDatabase } from '../db/schema'
-import { hasColumn, parseJsonRecord } from './db'
+import { parseJsonRecord } from './db'
 import type { AnalysisWindow, RunStatus, RunSummary } from './types'
 
 type RunRow = {
@@ -34,10 +34,6 @@ type WindowRow = {
   latency_ms: number | null
   error: string | null
   created_at: number
-}
-
-function hasRunOwnedWindows(db: AppDatabase): boolean {
-  return hasColumn(db, 'analysis_runs', 'conversation_id') && hasColumn(db, 'windows', 'run_id')
 }
 
 function mapRun(row: RunRow): RunSummary {
@@ -85,47 +81,21 @@ function mapStatus(status: string): RunStatus {
 }
 
 export function listRuns(db: AppDatabase, conversationId: number): RunSummary[] {
-  if (hasRunOwnedWindows(db)) {
-    const rows = db
-      .prepare(
-        `
-        SELECT
-          ar.id,
-          ar.conversation_id,
-          ar.method_key,
-          ar.status,
-          ar.started_at,
-          ar.completed_at,
-          ar.summary_json,
-          COUNT(w.id) AS window_count
-        FROM analysis_runs ar
-        LEFT JOIN windows w ON w.run_id = ar.id
-        WHERE ar.conversation_id = ?
-        GROUP BY ar.id
-        ORDER BY ar.started_at DESC, ar.id DESC
-      `,
-      )
-      .all(conversationId) as RunRow[]
-    return rows.map(mapRun)
-  }
-
   const rows = db
     .prepare(
       `
       SELECT
         ar.id,
-        MIN(w.conversation_id) AS conversation_id,
-        sc.key AS method_key,
+        ar.conversation_id,
+        ar.method_key,
         ar.status,
         ar.started_at,
         ar.completed_at,
-        '{}' AS summary_json,
-        COUNT(rw.window_id) AS window_count
+        ar.summary_json,
+        COUNT(w.id) AS window_count
       FROM analysis_runs ar
-      JOIN scorer_configs sc ON sc.id = ar.scorer_config_id
-      JOIN run_windows rw ON rw.run_id = ar.id
-      JOIN windows w ON w.id = rw.window_id
-      WHERE w.conversation_id = ?
+      LEFT JOIN windows w ON w.run_id = ar.id
+      WHERE ar.conversation_id = ?
       GROUP BY ar.id
       ORDER BY ar.started_at DESC, ar.id DESC
     `,
@@ -135,73 +105,33 @@ export function listRuns(db: AppDatabase, conversationId: number): RunSummary[] 
 }
 
 export function getRunWindows(db: AppDatabase, runId: number): AnalysisWindow[] {
-  if (hasRunOwnedWindows(db)) {
-    const rows = db
-      .prepare(
-        `
-        SELECT
-          w.id,
-          w.run_id,
-          w.conversation_id,
-          w.ordinal,
-          w.start_ordinal,
-          w.end_ordinal,
-          w.context_start_ordinal,
-          w.context_end_ordinal,
-          w.focal_start_ordinal,
-          w.focal_end_ordinal,
-          w.message_count,
-          w.context_message_count,
-          w.focal_message_count,
-          w.window_metadata_json,
-          w.result_json,
-          w.shift_json,
-          w.status,
-          w.latency_ms,
-          w.error,
-          w.created_at
-        FROM windows w
-        WHERE w.run_id = ?
-        ORDER BY w.ordinal, w.id
-      `,
-      )
-      .all(runId) as WindowRow[]
-    return rows.map(mapWindow)
-  }
-
   const rows = db
     .prepare(
       `
       SELECT
         w.id,
-        rw.run_id,
+        w.run_id,
         w.conversation_id,
-        ROW_NUMBER() OVER (ORDER BY w.start_ordinal, w.end_ordinal, w.id) AS ordinal,
+        w.ordinal,
         w.start_ordinal,
         w.end_ordinal,
-        NULL AS context_start_ordinal,
-        NULL AS context_end_ordinal,
-        w.start_ordinal AS focal_start_ordinal,
-        w.end_ordinal AS focal_end_ordinal,
+        w.context_start_ordinal,
+        w.context_end_ordinal,
+        w.focal_start_ordinal,
+        w.focal_end_ordinal,
         w.message_count,
-        0 AS context_message_count,
-        w.message_count AS focal_message_count,
-        json_object(
-          'compatibility', 'global-window',
-          'windowConfigId', w.window_config_id,
-          'deterministicKey', w.deterministic_key
-        ) AS window_metadata_json,
-        COALESCE(wr.result_json, '{}') AS result_json,
-        '{}' AS shift_json,
-        rw.status,
-        NULL AS latency_ms,
-        NULL AS error,
+        w.context_message_count,
+        w.focal_message_count,
+        w.window_metadata_json,
+        w.result_json,
+        w.shift_json,
+        w.status,
+        w.latency_ms,
+        w.error,
         w.created_at
-      FROM run_windows rw
-      JOIN windows w ON w.id = rw.window_id
-      LEFT JOIN window_results wr ON wr.run_id = rw.run_id AND wr.window_id = rw.window_id
-      WHERE rw.run_id = ?
-      ORDER BY w.start_ordinal, w.end_ordinal, w.id
+      FROM windows w
+      WHERE w.run_id = ?
+      ORDER BY w.ordinal, w.id
     `,
     )
     .all(runId) as WindowRow[]

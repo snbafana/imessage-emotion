@@ -126,8 +126,12 @@ export interface WindowMessage {
 export interface BaselineRunOptions {
   methodKey?: string
   windowSize?: number
+  contextMessages?: number
+  focalMessages?: number
   stride?: number
+  minFocalMessages?: number
   mode?: 'absolute-message-count' | 'comparative-message-count'
+  scorerConfig?: Record<string, unknown>
 }
 
 export type WindowMessageSlice = 'all' | 'full' | 'context' | 'focal'

@@ -95,18 +95,6 @@ function seedConversation(
   return { conversationId, contactId, messageIds }
 }
 
-function seedScorer(db: AppDatabase): number {
-  const result = db
-    .prepare(
-      `
-      INSERT INTO scorer_configs (key, label, config_json)
-      VALUES ('baseline-v1', 'Baseline v1', '{}')
-    `,
-    )
-    .run()
-  return Number(result.lastInsertRowid)
-}
-
 function assertConversationReadApi(db: AppDatabase, conversationId: number): void {
   const conversations = listConversations(db)
   const conversation = conversations.find((item) => item.id === conversationId)
@@ -124,128 +112,10 @@ function assertConversationReadApi(db: AppDatabase, conversationId: number): voi
   assert.equal(detail.runs.length, 1)
 }
 
-function smokeCompatibilitySchema(): void {
-  withTempDb('compatibility', (db) => {
-    const primary = seedConversation(
-      db,
-      1,
-      'chat-compat-primary',
-      'Synthetic Contact',
-      '+15550001001',
-      'primary',
-    )
-    seedConversation(db, 2, 'chat-compat-other', 'Other Contact', '+15550001002', 'other')
-    const scorerConfigId = seedScorer(db)
-
-    const windowConfig = db
-      .prepare(
-        `
-        INSERT INTO window_configs (name, message_count, stride, min_tail_messages)
-        VALUES ('compat-4', 4, 4, 1)
-      `,
-      )
-      .run()
-    const windowConfigId = Number(windowConfig.lastInsertRowid)
-    const analysisRun = db
-      .prepare(
-        `
-        INSERT INTO analysis_runs (scorer_config_id, status, started_at, completed_at)
-        VALUES (?, 'complete', 1700000500000, 1700000600000)
-      `,
-      )
-      .run(scorerConfigId)
-    const runId = Number(analysisRun.lastInsertRowid)
-    const window = db
-      .prepare(
-        `
-        INSERT INTO windows (
-          window_config_id,
-          conversation_id,
-          start_ordinal,
-          end_ordinal,
-          start_message_id,
-          end_message_id,
-          start_at,
-          end_at,
-          message_count,
-          deterministic_key
-        )
-        VALUES (?, ?, 2, 5, ?, ?, 1700000120001, 1700000300001, 4, 'compat-window')
-      `,
-      )
-      .run(windowConfigId, primary.conversationId, primary.messageIds[1], primary.messageIds[4])
-    const windowId = Number(window.lastInsertRowid)
-
-    db.prepare(
-      `
-      INSERT INTO run_windows (run_id, window_id, status)
-      VALUES (?, ?, 'complete')
-    `,
-    ).run(runId, windowId)
-    db.prepare(
-      `
-      INSERT INTO window_results (run_id, window_id, scorer_config_id, result_json)
-      VALUES (?, ?, ?, '{"dominant":"joy"}')
-    `,
-    ).run(runId, windowId, scorerConfigId)
-
-    assertConversationReadApi(db, primary.conversationId)
-
-    const runs = listRuns(db, primary.conversationId)
-    assert.equal(runs.length, 1)
-    assert.equal(runs[0].methodKey, 'baseline-v1')
-    assert.equal(runs[0].windowCount, 1)
-
-    const windows = getRunWindows(db, runId)
-    assert.equal(windows.length, 1)
-    assert.equal(windows[0].startOrdinal, 2)
-    assert.equal(windows[0].focalStartOrdinal, 2)
-    assert.equal(windows[0].result.dominant, 'joy')
-
-    const full = getWindowMessages(db, windowId, 'full')
-    assert.deepEqual(
-      full.map((message) => message.conversationOrdinal),
-      [2, 3, 4, 5],
-    )
-    assert.ok(full.every((message) => message.conversationId === primary.conversationId))
-
-    const focal = getWindowMessages(db, windowId, 'focal')
-    assert.deepEqual(
-      focal.map((message) => message.conversationOrdinal),
-      [2, 3, 4, 5],
-    )
-
-    const context = getWindowMessages(db, windowId, 'context')
-    assert.deepEqual(context, [])
-  })
-}
-
-function installRunOwnedFixtureColumns(db: AppDatabase): void {
-  db.exec(`
-    ALTER TABLE analysis_runs ADD COLUMN conversation_id INTEGER;
-    ALTER TABLE analysis_runs ADD COLUMN method_key TEXT;
-    ALTER TABLE analysis_runs ADD COLUMN summary_json TEXT DEFAULT '{}';
-    ALTER TABLE windows ADD COLUMN run_id INTEGER;
-    ALTER TABLE windows ADD COLUMN ordinal INTEGER;
-    ALTER TABLE windows ADD COLUMN context_start_ordinal INTEGER;
-    ALTER TABLE windows ADD COLUMN context_end_ordinal INTEGER;
-    ALTER TABLE windows ADD COLUMN focal_start_ordinal INTEGER;
-    ALTER TABLE windows ADD COLUMN focal_end_ordinal INTEGER;
-    ALTER TABLE windows ADD COLUMN context_message_count INTEGER DEFAULT 0;
-    ALTER TABLE windows ADD COLUMN focal_message_count INTEGER;
-    ALTER TABLE windows ADD COLUMN window_metadata_json TEXT DEFAULT '{}';
-    ALTER TABLE windows ADD COLUMN result_json TEXT DEFAULT '{}';
-    ALTER TABLE windows ADD COLUMN shift_json TEXT DEFAULT '{}';
-    ALTER TABLE windows ADD COLUMN status TEXT DEFAULT 'pending';
-    ALTER TABLE windows ADD COLUMN latency_ms INTEGER;
-    ALTER TABLE windows ADD COLUMN error TEXT;
-  `)
-}
-
+// Seeds the canonical run-owned schema (analysis_runs -> windows) and asserts the
+// read APIs return it. No legacy scorer_configs/run_windows compatibility path.
 function smokeRunOwnedSchema(): void {
   withTempDb('run-owned', (db) => {
-    installRunOwnedFixtureColumns(db)
-
     const primary = seedConversation(
       db,
       1,
@@ -255,40 +125,31 @@ function smokeRunOwnedSchema(): void {
       'primary',
     )
     seedConversation(db, 2, 'chat-run-owned-other', 'Other Contact', '+15550002002', 'other')
-    const scorerConfigId = seedScorer(db)
 
-    const windowConfig = db
-      .prepare(
-        `
-        INSERT INTO window_configs (name, message_count, stride, min_tail_messages)
-        VALUES ('run-owned-6', 6, 3, 1)
-      `,
-      )
-      .run()
-    const windowConfigId = Number(windowConfig.lastInsertRowid)
     const analysisRun = db
       .prepare(
         `
         INSERT INTO analysis_runs (
-          scorer_config_id,
           conversation_id,
           method_key,
           status,
+          window_config_json,
+          context_config_json,
+          scorer_config_json,
           summary_json,
           started_at,
           completed_at
         )
-        VALUES (?, ?, 'baseline-v1', 'complete', '{"windowCount":1}', 1700000500000, 1700000600000)
+        VALUES (?, 'baseline-v1', 'complete', '{}', '{}', '{}', '{"windowCount":1}', 1700000500000, 1700000600000)
       `,
       )
-      .run(scorerConfigId, primary.conversationId)
+      .run(primary.conversationId)
     const runId = Number(analysisRun.lastInsertRowid)
 
     const window = db
       .prepare(
         `
         INSERT INTO windows (
-          window_config_id,
           run_id,
           conversation_id,
           ordinal,
@@ -300,8 +161,6 @@ function smokeRunOwnedSchema(): void {
           focal_end_ordinal,
           start_message_id,
           end_message_id,
-          start_at,
-          end_at,
           message_count,
           context_message_count,
           focal_message_count,
@@ -309,17 +168,16 @@ function smokeRunOwnedSchema(): void {
           result_json,
           shift_json,
           status,
-          latency_ms,
-          deterministic_key
+          latency_ms
         )
         VALUES (
-          ?, ?, ?, 1, 1, 6, 1, 3, 4, 6, ?, ?, 1700000060001, 1700000360001, 6,
-          3, 3, '{"mode":"comparative-message-count"}', '{"dominant":"trust"}',
-          '{"delta":0.2}', 'complete', 12, 'run-owned-window'
+          ?, ?, 1, 1, 6, 1, 3, 4, 6, ?, ?, 6, 3, 3,
+          '{"mode":"comparative-message-count"}', '{"dominant":"trust"}',
+          '{"delta":0.2}', 'complete', 12
         )
       `,
       )
-      .run(windowConfigId, runId, primary.conversationId, primary.messageIds[0], primary.messageIds[5])
+      .run(runId, primary.conversationId, primary.messageIds[0], primary.messageIds[5])
     const windowId = Number(window.lastInsertRowid)
 
     assertConversationReadApi(db, primary.conversationId)
@@ -358,7 +216,6 @@ function smokeRunOwnedSchema(): void {
   })
 }
 
-smokeCompatibilitySchema()
 smokeRunOwnedSchema()
 
 console.log('backend read API smoke passed')
