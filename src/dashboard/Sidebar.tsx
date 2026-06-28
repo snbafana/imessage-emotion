@@ -1,4 +1,5 @@
 import { Avatar } from '@base-ui/react/avatar'
+import { Button } from '@base-ui/react/button'
 import { Input } from '@base-ui/react/input'
 import type { ConversationView } from './data'
 import { formatMessageCount, runStateLabel } from './data'
@@ -54,7 +55,7 @@ export default function Sidebar({
 
       <div className="people">
         {conversations.map((conversation) => (
-          <button
+          <Button
             key={conversation.id}
             className={`person${conversation.id === activeId ? ' active' : ''}`}
             onClick={() => onSelect(conversation.id)}
@@ -69,7 +70,7 @@ export default function Sidebar({
                 {runStateLabel(conversation.latestRun, [])}
               </span>
             </div>
-          </button>
+          </Button>
         ))}
       </div>
     </aside>

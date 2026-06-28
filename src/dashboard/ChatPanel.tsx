@@ -1,6 +1,8 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
+import { Button } from '@base-ui/react/button'
+import { Input } from '@base-ui/react/input'
 import type { EveMessageData, UseEveAgentHelpers } from 'eve/react'
 import { SendIcon, SparkleIcon } from './icons'
 
@@ -52,21 +54,21 @@ export default function ChatPanel({ agent, conversationId, runId, windowId = nul
 
       {/* Scope: whole timeline vs the selected window */}
       <div className="scope-switcher">
-        <button
+        <Button
           className={`scope-option${scope === 'whole' ? ' active' : ''}`}
           onClick={() => setScope('whole')}
         >
           <span className="scope-title">Whole timeline</span>
           <span className="scope-sub">all windows in {label}</span>
-        </button>
-        <button
+        </Button>
+        <Button
           className={`scope-option${scope === 'window' ? ' active' : ''}`}
           onClick={() => setScope('window')}
           disabled={windowId == null}
         >
           <span className="scope-title">This window</span>
           <span className="scope-sub">{windowId == null ? 'select a window' : `window #${windowId}`}</span>
-        </button>
+        </Button>
       </div>
 
       <div className="chat-body">
@@ -106,16 +108,16 @@ export default function ChatPanel({ agent, conversationId, runId, windowId = nul
 
       <form className="input-bar" onSubmit={submit}>
         <div className="field">
-          <input
+          <Input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={scope === 'window' && windowId != null ? `Ask about window #${windowId}…` : 'Ask about the whole timeline…'}
             aria-label="Ask the timeline"
           />
         </div>
-        <button className="send" type="submit" aria-label="Send" disabled={busy}>
+        <Button className="send" type="submit" aria-label="Send" disabled={busy}>
           <SendIcon />
-        </button>
+        </Button>
       </form>
 
       <div className="eve-footer">

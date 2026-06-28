@@ -1,3 +1,4 @@
+import { Button } from '@base-ui/react/button'
 import type { EmotionKey, RunView, WindowView } from './data'
 import { EMOTIONS, gradientFor, runStateLabel, timelineBlocks } from './data'
 import { NEGATIVE_ANCHORS, POSITIVE_ANCHORS } from '../lib/emotion/anchors'
@@ -88,7 +89,7 @@ export default function EmotionTimeline({
               {blocks.map((block) => {
                 const dominant = block.window.dominant ?? block.composition[0]?.emotion ?? null
                 return (
-                  <button
+                  <Button
                     key={block.window.id}
                     className={`block window-block${block.window.id === selectedId ? ' selected' : ''}`}
                     style={{
@@ -102,7 +103,7 @@ export default function EmotionTimeline({
                     title={`${block.window.label} · ${dominant ? EMOTIONS[dominant].label : 'no score yet'}`}
                   >
                     <span>{block.window.ordinal}</span>
-                  </button>
+                  </Button>
                 )
               })}
 
