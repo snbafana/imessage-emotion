@@ -175,6 +175,15 @@ export interface WindowMessage {
   slice: LabelingMessageSlice
 }
 
+export interface AnalysisRunOptions {
+  contextMessages?: number
+  focalMessages?: number
+  stride?: number
+  minFocalMessages?: number
+  mode?: 'absolute-message-count' | 'comparative-message-count'
+  scorerConfig?: Record<string, unknown>
+}
+
 export type WindowMessageSlice = 'all' | 'full' | 'context' | 'focal'
 export type LabelingMessageSlice = WindowMessageSlice | 'before' | 'after'
 

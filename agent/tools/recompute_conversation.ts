@@ -2,35 +2,51 @@ import { defineTool } from 'eve/tools'
 import { z } from 'zod'
 import { getDb } from '../../src/lib/db/connection'
 import { getRunWindows } from '../../src/lib/api/runs'
-import { createBaselineRun } from '../../src/lib/emotion/run-baseline'
+import { createAxRun } from '../../src/lib/emotion/run-analysis'
+import { planCappedRunWindowConfig } from '../../src/lib/windows/windows'
 
 export default defineTool({
   description:
-    'Start a full recomputation of a conversation: builds a fresh analysis run and its windows from the conversation messages (works for a brand-new conversation or to rescore an existing one), then returns the ordered window plan. Follow up by calling score_window for each window in order — that streams the window-by-window rescore to the user — then summarize the arc.',
+    'Start a capped Ax recomputation of a conversation: builds a fresh analysis run and run-owned windows, then returns the ordered window plan. Follow up by calling score_window for each window in order.',
   inputSchema: z.object({
     conversationId: z.number(),
-    windowSize: z.number().default(16).describe('focal messages per window'),
-    stride: z.number().default(8).describe('messages advanced between windows'),
+    messageCount: z.number().optional().describe('Conversation message count when available'),
+    maxWindows: z.number().int().positive().max(200).default(200),
+    overlapPercent: z.number().int().min(10).max(40).default(25),
+    model: z.string().default('google/gemini-2.5-flash'),
+    effort: z.enum(['low', 'medium', 'high']).default('medium'),
   }),
-  async execute({ conversationId, windowSize, stride }) {
+  async execute({ conversationId, messageCount, maxWindows, overlapPercent, model, effort }) {
     const db = getDb()
-    // Creates analysis_runs + windows from the conversation's messages. Keep the
-    // window config internally consistent (minFocalMessages <= focalMessages).
-    const { runId, windowCount } = createBaselineRun(db, conversationId, {
-      mode: 'comparative-message-count',
-      contextMessages: windowSize * 2,
-      focalMessages: windowSize,
-      stride,
-      minFocalMessages: Math.max(1, Math.min(windowSize, 8)),
+    const lastOrdinal =
+      messageCount ??
+      ((db
+        .prepare('SELECT MAX(conversation_ordinal) AS last_ordinal FROM messages WHERE conversation_id = ?')
+        .get(conversationId) as { last_ordinal: number | null }).last_ordinal ??
+        0)
+    const plan = planCappedRunWindowConfig(lastOrdinal, { maxWindows, overlapPercent })
+    const { runId, windowCount } = createAxRun(db, conversationId, {
+      ...plan.config,
+      scorerConfig: {
+        promptKey: 'eve-capped-overlap-ax-v1',
+        label: `Ax capped ${overlapPercent}% overlap`,
+        provider: 'openrouter',
+        effort,
+        model,
+        maxWindows,
+        overlapPercent,
+        estimatedWindowCount: plan.windowCount,
+      },
     })
     const windows = getRunWindows(db, runId)
     return {
       conversationId,
       runId,
       windowCount,
-      windowSize,
-      stride,
-      // The agent should call score_window for each of these, in order.
+      windowConfig: plan.config,
+      maxWindows,
+      overlapPercent,
+      model,
       windows: windows.map((w) => ({ id: w.id, ordinal: w.ordinal, focal: `${w.focalStartOrdinal}-${w.focalEndOrdinal}` })),
       next: 'Call score_window(runId, windowId) for each window in order, then summarize.',
       citations: windows.map((w) => ({ type: 'window' as const, id: w.id, label: `W${w.ordinal}` })),

@@ -1,19 +1,38 @@
 import { Button } from '@base-ui/react/button'
-import type { ReactNode } from 'react'
-import type { EmotionKey, RunView, WindowView } from './data'
-import { EMOTIONS, SCORE_KEYS, gradientFor, runStateLabel, timelineBlocks } from './data'
+import type { ComparativeRunWindowConfig } from '../lib/windows/windows'
+import type { ConversationView, EmotionKey, RunView, WindowView } from './data'
+import { EMOTIONS, SCORE_KEYS, formatMessageCount, gradientFor, runStateLabel, timelineBlocks } from './data'
+
+export type AnalysisSetupValue = {
+  planner: 'capped' | 'manual'
+  provider: 'openrouter' | 'openai'
+  effort: 'low' | 'medium' | 'high'
+  model: string
+  maxWindows: number
+  overlapPercent: number
+  contextMessages: number
+  focalMessages: number
+  minFocalMessages: number
+}
+
+export type AnalysisSetupPlan = {
+  config: ComparativeRunWindowConfig
+  windowCount: number
+  error: string | null
+}
 
 const PLOT_WIDTH = 1000
 const PLOT_HEIGHT = 210
 const PLOT_TOP = 16
 const PLOT_BOTTOM = 190
+const BLOCK_RENDER_WINDOW_LIMIT = 50
 
 type EmotionSeries = {
   emotion: EmotionKey
   path: string
   max: number
   average: number
-  values: number[]
+  valuesByWindowId: Record<string, number>
 }
 
 function scoreY(value: number): number {
@@ -22,12 +41,7 @@ function scoreY(value: number): number {
 
 // Smooth Catmull-Rom path through per-window scores in a fixed non-scaling
 // viewBox. This keeps sparse large-window runs and dense granular runs readable.
-function scorePath(values: number[]): string {
-  if (values.length === 0) return ''
-  const points: [number, number][] = values.map((value, i) => [
-    values.length === 1 ? PLOT_WIDTH / 2 : (i / (values.length - 1)) * PLOT_WIDTH,
-    scoreY(value),
-  ])
+function scorePath(points: [number, number][]): string {
   if (points.length === 1) return `M${points[0][0]},${points[0][1]} L1000,${points[0][1]}`
   let d = `M${points[0][0]},${points[0][1]}`
   for (let i = 0; i < points.length - 1; i += 1) {
@@ -46,14 +60,25 @@ function scorePath(values: number[]): string {
 
 function emotionSeries(windows: WindowView[]): EmotionSeries[] {
   return SCORE_KEYS.map((emotion) => {
-    const values = windows.map((window) => clamp01(window.scores[emotion] ?? 0))
+    const rows = windows
+      .map((window, index) => {
+        const value = window.scores[emotion]
+        if (value == null) return null
+        return {
+          windowId: window.id,
+          value: clamp01(value),
+          x: selectedX(index, windows.length),
+        }
+      })
+      .filter((row): row is { windowId: string; value: number; x: number } => row !== null)
+    const values = rows.map((row) => row.value)
     const total = values.reduce((sum, value) => sum + value, 0)
     return {
       emotion,
-      path: scorePath(values),
+      path: scorePath(rows.map((row) => [row.x, scoreY(row.value)])),
       max: Math.max(0, ...values),
       average: values.length === 0 ? 0 : total / values.length,
-      values,
+      valuesByWindowId: Object.fromEntries(rows.map((row) => [row.windowId, row.value])),
     }
   })
 }
@@ -70,19 +95,17 @@ function runMeta(run: RunView): string {
   return `${scored}/${total} windows`
 }
 
-function runOptionLabel(run: RunView): string {
-  return `${run.scaleLabel} · ${run.configLabel} · ${runMeta(run)}`
+function runScorerMeta(run: RunView): string {
+  const provider = stringValue(run.scorerConfig.provider) ?? 'provider unknown'
+  const model = stringValue(run.scorerConfig.model) ?? 'default model'
+  const effort = stringValue(run.scorerConfig.effort)
+  const overlap = numberValue(run.scorerConfig.overlapPercent)
+  const parts = [provider, model, effort, overlap == null ? null : `${overlap}% overlap`].filter(Boolean)
+  return parts.join(' · ')
 }
 
-function formatWindowDate(window: WindowView | undefined): string {
-  const value = window?.startSentAt ?? window?.endSentAt ?? null
-  if (value == null) return window ? `${window.startOrdinal}` : ''
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(value)
+function hasScores(window: WindowView): boolean {
+  return SCORE_KEYS.some((key) => window.scores[key] != null)
 }
 
 export default function EmotionTimeline({
@@ -93,11 +116,14 @@ export default function EmotionTimeline({
   selectedRunId,
   loading,
   error,
+  conversation,
+  setup,
+  setupPlan,
+  setupRunning,
+  onChangeSetup,
+  onRunSetup,
   onSelectRun,
   onSelectWindow,
-  actions,
-  statusLine,
-  statusTone = 'neutral',
 }: {
   run: RunView | null
   runs: RunView[]
@@ -106,46 +132,55 @@ export default function EmotionTimeline({
   selectedRunId: string | null
   loading: boolean
   error: string | null
+  conversation: ConversationView | null
+  setup: AnalysisSetupValue
+  setupPlan: AnalysisSetupPlan | null
+  setupRunning: boolean
+  onChangeSetup: (patch: Partial<AnalysisSetupValue>) => void
+  onRunSetup: () => void
   onSelectRun: (id: string) => void
   onSelectWindow: (id: string) => void
-  actions?: ReactNode
-  statusLine?: string | null
-  statusTone?: 'neutral' | 'error'
 }) {
   const stateLabel = runStateLabel(run, windows)
   const blocks = timelineBlocks(windows)
-  const hasScores = blocks.some((block) => block.composition.length > 0)
+  const scoredBlocks = blocks.filter((block) => hasScores(block.window))
+  const blockWindowCount = run?.windowCount ?? windows.length
+  const showBlocks = blockWindowCount <= BLOCK_RENDER_WINDOW_LIMIT
+  const hasScoreData = scoredBlocks.length > 0
   const series = emotionSeries(windows)
-  const selectedIndex = blocks.findIndex((block) => block.window.id === selectedId)
-  const markerX = selectedX(selectedIndex, blocks.length)
+  const selectedIndex = windows.findIndex((window) => window.id === selectedId)
+  const markerX = selectedX(selectedIndex, windows.length)
 
   return (
     <section className="timeline-panel">
       <div className="panel-head">
-        <div className="timeline-tools">
-          {runs.length > 0 && (
-            <label className="run-select-wrap">
-              <span>Run</span>
-              <select
-                className="run-select"
-                value={selectedRunId ?? ''}
-                onChange={(event) => onSelectRun(event.target.value)}
-              >
-                {runs.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {runOptionLabel(item)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-          {(actions || statusLine) && (
-            <div className="timeline-actions">
-              {statusLine && <span className={`timeline-status ${statusTone}`}>{statusLine}</span>}
-              {actions}
-            </div>
-          )}
+        <div className="heading">
+          <div className="title-row">
+            <h1>{run ? 'Emotion graph' : stateLabel}</h1>
+            {run && (
+              <span className={`trend-note status-${run.state}`}>
+                {run.scaleLabel} · {run.configLabel} · {runScorerMeta(run)} · {runMeta(run)}
+              </span>
+            )}
+          </div>
         </div>
+        {runs.length > 1 && (
+          <div className="run-switcher" aria-label="Analysis runs">
+            {runs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`run-tab scale-${item.scale}`}
+                aria-pressed={item.id === selectedRunId}
+                data-selected={item.id === selectedRunId ? '' : undefined}
+                onClick={() => onSelectRun(item.id)}
+              >
+                <span className="run-kind">{item.scaleLabel}</span>
+                <span className="run-count">{runMeta(item)}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="chart">
@@ -154,7 +189,16 @@ export default function EmotionTimeline({
         ) : error ? (
           <TimelineState label={error} tone="error" />
         ) : blocks.length === 0 ? (
-          <TimelineState label={stateLabel} />
+          <AnalysisSetupPanel
+            conversation={conversation}
+            setup={setup}
+            plan={setupPlan}
+            running={setupRunning}
+            onChange={onChangeSetup}
+            onRun={onRunSetup}
+          />
+        ) : !hasScoreData ? (
+          <TimelineState label="Waiting for first scored Ax window..." />
         ) : (
           <>
             <div className="plot">
@@ -162,29 +206,33 @@ export default function EmotionTimeline({
               <div className="gridline" style={{ top: 70 }} />
               <div className="gridline" style={{ top: 140 }} />
 
-              {blocks.map((block) => {
-                const dominant = block.window.dominant ?? block.composition[0]?.emotion ?? null
-                return (
-                  <Button
-                    key={block.window.id}
-                    className={`block window-block${block.window.id === selectedId ? ' selected' : ''}`}
-                    style={{
-                      height: `${30 + block.intensity * 160}px`,
-                      background:
-                        block.window.state === 'failed'
-                          ? '#d9d9dd'
-                          : gradientFor(block.composition),
-                    }}
-                    onClick={() => onSelectWindow(block.window.id)}
-                    title={`${block.window.label} · ${dominant ? EMOTIONS[dominant].label : 'no score yet'}`}
-                    aria-label={`${block.window.label}, ${dominant ? EMOTIONS[dominant].label : 'no score yet'}`}
-                  >
-                    <span>{block.window.ordinal}</span>
-                  </Button>
-                )
-              })}
+              {showBlocks &&
+                scoredBlocks.map((block) => {
+                  const dominant = block.window.dominant ?? block.composition[0]?.emotion ?? null
+                  const index = windows.findIndex((window) => window.id === block.window.id)
+                  return (
+                    <Button
+                      key={block.window.id}
+                      className={`block window-block${block.window.id === selectedId ? ' selected' : ''}`}
+                      style={{
+                        left: `${selectedX(index, windows.length) / 10}%`,
+                        width: `max(2px, ${100 / Math.max(1, windows.length)}%)`,
+                        height: `${30 + block.intensity * 160}px`,
+                        background:
+                          block.window.state === 'failed'
+                            ? '#d9d9dd'
+                            : gradientFor(block.composition),
+                      }}
+                      onClick={() => onSelectWindow(block.window.id)}
+                      title={`${block.window.label} · ${dominant ? EMOTIONS[dominant].label : 'no score yet'}`}
+                      aria-label={`${block.window.label}, ${dominant ? EMOTIONS[dominant].label : 'no score yet'}`}
+                    >
+                      <span>{block.window.ordinal}</span>
+                    </Button>
+                  )
+                })}
 
-              {hasScores ? (
+              {hasScoreData ? (
                 <div className="line-overlay">
                   <svg
                     width="100%"
@@ -211,7 +259,7 @@ export default function EmotionTimeline({
                         <circle
                           key={`${item.emotion}-marker`}
                           cx={markerX}
-                          cy={scoreY(item.values[selectedIndex] ?? 0)}
+                          cy={scoreY(item.valuesByWindowId[selectedId ?? ''] ?? 0)}
                           r={3.2}
                           fill={EMOTIONS[item.emotion].color}
                           stroke="#fff"
@@ -236,9 +284,9 @@ export default function EmotionTimeline({
             </div>
 
             <div className="axis">
-              <span>{formatWindowDate(windows[0])}</span>
-              <span>{formatWindowDate(windows[Math.floor(windows.length / 2)])}</span>
-              <span>{formatWindowDate(windows[windows.length - 1])}</span>
+              <span>{windows[0]?.startOrdinal}</span>
+              <span>{windows[Math.floor(windows.length / 2)]?.startOrdinal}</span>
+              <span>{windows[windows.length - 1]?.endOrdinal}</span>
             </div>
           </>
         )}
@@ -249,6 +297,179 @@ export default function EmotionTimeline({
 
 function TimelineState({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'error' }) {
   return <div className={`timeline-state ${tone}`}>{label}</div>
+}
+
+function AnalysisSetupPanel({
+  conversation,
+  setup,
+  plan,
+  running,
+  onChange,
+  onRun,
+}: {
+  conversation: ConversationView | null
+  setup: AnalysisSetupValue
+  plan: AnalysisSetupPlan | null
+  running: boolean
+  onChange: (patch: Partial<AnalysisSetupValue>) => void
+  onRun: () => void
+}) {
+  return (
+    <div className="analysis-setup">
+      <div className="setup-summary">
+        <div>
+          <span className="label">Ax run setup</span>
+          <h2>{conversation ? conversation.title : 'Choose a conversation'}</h2>
+        </div>
+        <span className="setup-count">
+          {conversation ? `${formatMessageCount(conversation.messageCount)} messages` : 'No conversation'}
+        </span>
+      </div>
+
+      <div className="setup-grid">
+        <label className="setup-field">
+          <span>Provider</span>
+          <select
+            value={setup.provider}
+            onChange={(event) => onChange({ provider: event.target.value as AnalysisSetupValue['provider'] })}
+          >
+            <option value="openrouter">OpenRouter</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        </label>
+        <label className="setup-field model-field">
+          <span>Model</span>
+          <input
+            list="ax-models"
+            value={setup.model}
+            onChange={(event) => onChange({ model: event.target.value })}
+          />
+          <datalist id="ax-models">
+            <option value="google/gemini-2.5-flash" />
+            <option value="google/gemini-2.5-flash-lite" />
+            <option value="anthropic/claude-haiku-4.5" />
+          </datalist>
+        </label>
+        <label className="setup-field">
+          <span>Effort</span>
+          <select
+            value={setup.effort}
+            onChange={(event) => onChange({ effort: event.target.value as AnalysisSetupValue['effort'] })}
+          >
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+        <label className="setup-field">
+          <span>Max windows</span>
+          <input
+            type="number"
+            min={1}
+            max={200}
+            value={setup.maxWindows}
+            onChange={(event) => onChange({ maxWindows: numberInput(event.target.value, 200) })}
+          />
+        </label>
+        <label className="setup-field">
+          <span>Overlap</span>
+          <input
+            type="range"
+            min={10}
+            max={40}
+            value={setup.overlapPercent}
+            onChange={(event) => onChange({ overlapPercent: numberInput(event.target.value, 25) })}
+          />
+          <strong>{setup.overlapPercent}%</strong>
+        </label>
+      </div>
+
+      <div className="setup-mode" role="group" aria-label="Window planning mode">
+        <button
+          type="button"
+          data-selected={setup.planner === 'capped' ? '' : undefined}
+          onClick={() => onChange({ planner: 'capped' })}
+        >
+          Capped planner
+        </button>
+        <button
+          type="button"
+          data-selected={setup.planner === 'manual' ? '' : undefined}
+          onClick={() => onChange({ planner: 'manual' })}
+        >
+          Manual window
+        </button>
+      </div>
+
+      {setup.planner === 'manual' && (
+        <div className="setup-grid compact">
+          <label className="setup-field">
+            <span>Context</span>
+            <input
+              type="number"
+              min={1}
+              value={setup.contextMessages}
+              onChange={(event) => onChange({ contextMessages: numberInput(event.target.value, 80) })}
+            />
+          </label>
+          <label className="setup-field">
+            <span>Focal</span>
+            <input
+              type="number"
+              min={1}
+              value={setup.focalMessages}
+              onChange={(event) => onChange({ focalMessages: numberInput(event.target.value, 40) })}
+            />
+          </label>
+          <label className="setup-field">
+            <span>Min tail</span>
+            <input
+              type="number"
+              min={1}
+              value={setup.minFocalMessages}
+              onChange={(event) => onChange({ minFocalMessages: numberInput(event.target.value, 20) })}
+            />
+          </label>
+        </div>
+      )}
+
+      <div className={`setup-plan${plan?.error ? ' error' : ''}`}>
+        {plan ? (
+          <>
+            <span>{formatMessageCount(plan.windowCount)} estimated windows</span>
+            <span>{plan.config.contextMessages} context</span>
+            <span>{plan.config.focalMessages} focal</span>
+            <span>{plan.config.stride} stride</span>
+            {plan.error && <strong>{plan.error}</strong>}
+          </>
+        ) : (
+          <span>Select a conversation before running analysis.</span>
+        )}
+      </div>
+
+      <Button
+        className="setup-run"
+        disabled={!conversation || running || !plan || Boolean(plan.error) || !setup.model.trim()}
+        onClick={onRun}
+      >
+        {running ? 'Running Ax analysis...' : 'Run Ax analysis'}
+      </Button>
+    </div>
+  )
+}
+
+function numberInput(value: string, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function stringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function numberValue(value: unknown): number | null {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
 }
 
 function clamp01(value: number): number {

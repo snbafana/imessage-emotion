@@ -4,7 +4,7 @@ import { migrate, type AppDatabase } from '../db/schema'
 import { importBatch } from '../import/import-messages'
 import type { IMessageBatch } from '../imessage/types'
 import { syncContactRecords } from '../contacts/sync-contacts'
-import { createBaselineRun } from '../emotion/run-baseline'
+import { createAxAnalysisRun, type AxWindowScorer } from '../emotion/run-analysis'
 
 function createMemoryDb(): AppDatabase {
   const db = new Database(':memory:')
@@ -45,7 +45,7 @@ function syntheticBatch(messageCount: number): IMessageBatch {
 }
 
 describe('data foundation integration', () => {
-  it('imports messages, resolves contacts, builds run-owned windows, and scores a baseline run', () => {
+  it('imports messages, resolves contacts, builds run-owned windows, and scores an Ax run', async () => {
     const db = createMemoryDb()
 
     const importResult = importBatch(db, syntheticBatch(150))
@@ -74,7 +74,13 @@ describe('data foundation integration', () => {
       .get('+14155550123')
     expect(contact).toEqual({ display_name: 'Synthetic Contact', source_contact_id: 'card-1' })
 
-    const run = createBaselineRun(db, conversation.id)
+    const run = await createAxAnalysisRun(db, conversation.id, {
+      contextMessages: 100,
+      focalMessages: 50,
+      stride: 50,
+      minFocalMessages: 25,
+      scorer: fakeScorer,
+    })
     expect(run.windowCount).toBe(1)
 
     const windows = db
@@ -113,4 +119,28 @@ describe('data foundation integration', () => {
     expect(analysisRun.status).toBe('completed')
     expect(JSON.parse(analysisRun.summary_json).windowCount).toBe(1)
   })
+})
+
+const fakeScorer: AxWindowScorer = async () => ({
+  scores: {
+    anger: 0,
+    disgust: 0,
+    fear: 0,
+    joy: 0.2,
+    neutral: 0.8,
+    sadness: 0,
+    surprise: 0,
+  },
+  dominant: 'neutral',
+  confidence: 0.9,
+  summary: 'test scorer',
+  rationale: 'test rationale',
+  scoreRationales: { neutral: 'test neutral rationale' },
+  evidenceMessageIds: [],
+  method: 'ax-llm-v1',
+  scorer: 'ax-llm',
+  provider: 'openai',
+  model: 'test-model',
+  effort: 'medium',
+  promptKey: 'test',
 })

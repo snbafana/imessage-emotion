@@ -1,6 +1,7 @@
 import { Progress } from '@base-ui/react/progress'
 import type { MessageView, RunView, WindowView } from './data'
 import { EMOTIONS, SCORE_KEYS, runStateLabel } from './data'
+import { BulbIcon } from './icons'
 
 export default function Inspector({
   run,
@@ -20,11 +21,11 @@ export default function Inspector({
   const dominant = window?.dominant ?? 'neutral'
   const emotion = EMOTIONS[dominant]
   const stateLabel = runStateLabel(run, window ? [window] : [])
-  const explanation = window ? explainWindow(window, focalMessages) : stateLabel
 
   return (
     <section className="panel inspector">
       <div className="inspector-head">
+        <span className="dot" style={{ background: emotion.color }} />
         <div className="titles">
           <span className="t1">{window?.label ?? stateLabel}</span>
           <span className="t2">
@@ -69,11 +70,10 @@ export default function Inspector({
 
             <div className="reasoning">
               <div className="head">
-                <span className="label">
-                  {window?.dominant ? `Why this reads ${emotion.label.toLowerCase()}` : 'Window explanation'}
-                </span>
+                <BulbIcon />
+                <span className="label">Result JSON summary</span>
               </div>
-              <p>{explanation}</p>
+              <p>{window.rationale ?? window.summary}</p>
               {window.error && <p className="error-text">{window.error}</p>}
               <div className="drivers">
                 {SCORE_KEYS.map((key) => {
@@ -91,6 +91,9 @@ export default function Inspector({
                         </Progress.Track>
                       </Progress.Root>
                       <span className="pct">{value.toFixed(2)}</span>
+                      {window.scoreRationales[key] && (
+                        <span className="driver-reason">{window.scoreRationales[key]}</span>
+                      )}
                     </div>
                   )
                 })}
@@ -101,31 +104,6 @@ export default function Inspector({
       </div>
     </section>
   )
-}
-
-function explainWindow(window: WindowView, focalMessages: MessageView[]): string {
-  const summary = window.summary.trim()
-  const baselineOnly = summary.toLowerCase().includes('baseline lexical pass')
-  if (!baselineOnly) return summary
-
-  const dominant = window.dominant ?? 'neutral'
-  const score = window.scores[dominant] ?? window.intensity
-  const label = EMOTIONS[dominant].label.toLowerCase()
-  const sample = focalMessages
-    .map((message) => message.text.trim())
-    .filter(Boolean)
-    .slice(0, 3)
-    .join(' / ')
-
-  if (dominant === 'neutral') {
-    return sample
-      ? `Reads as neutral because the focal messages are mostly logistical or low-affect replies (${sample}) and the other emotion scores stay near zero.`
-      : 'Reads as neutral because this window has no strong emotional signals in the current scored messages and the non-neutral scores stay near zero.'
-  }
-
-  return `Reads as ${label} because that emotion is the strongest signal in this window (${score.toFixed(
-    2,
-  )}), with weaker competing emotion scores.`
 }
 
 function MessageGroup({

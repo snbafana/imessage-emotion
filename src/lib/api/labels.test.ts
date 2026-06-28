@@ -1,13 +1,38 @@
 import Database from 'better-sqlite3'
 import { describe, expect, it } from 'vitest'
 import { migrate, type AppDatabase } from '../db/schema'
-import { createBaselineRun } from '../emotion/run-baseline'
+import { createWindowsForRun, type RunWindowConfig } from '../windows/windows'
 import { getLabelingWindow, listLabelingWindows, saveWindowLabel } from './labels'
 
 function createMemoryDb(): AppDatabase {
   const db = new Database(':memory:')
   migrate(db)
   return db
+}
+
+// Deterministic run + windows for labeling tests (no LLM scoring needed).
+function createRunWithWindows(db: AppDatabase, conversationId: number): { windowCount: number } {
+  const config: RunWindowConfig = {
+    mode: 'comparative-message-count',
+    contextMessages: 100,
+    focalMessages: 50,
+    stride: 50,
+    minFocalMessages: 25,
+  }
+  const inserted = db
+    .prepare(
+      `
+      INSERT INTO analysis_runs (
+        conversation_id, method_key, status,
+        window_config_json, context_config_json, scorer_config_json, summary_json, started_at
+      )
+      VALUES (?, 'baseline-v1', 'completed', ?, '{}', '{}', '{}', 1000)
+    `,
+    )
+    .run(conversationId, JSON.stringify(config))
+  const runId = Number(inserted.lastInsertRowid)
+  const windowIds = createWindowsForRun(db, runId, conversationId, config)
+  return { windowCount: windowIds.length }
 }
 
 function seedConversation(db: AppDatabase, messageCount: number): number {
@@ -63,7 +88,7 @@ describe('window labels api', () => {
   it('lists labelable windows and persists human labels with message evidence', () => {
     const db = createMemoryDb()
     const conversationId = seedConversation(db, 180)
-    const run = createBaselineRun(db, conversationId)
+    const run = createRunWithWindows(db, conversationId)
     const [summary] = listLabelingWindows(db, { limit: 10 })
 
     expect(run.windowCount).toBe(2)

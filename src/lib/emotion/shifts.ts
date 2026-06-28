@@ -1,29 +1,37 @@
-import type { BaselineEmotion, BaselineResult } from './baseline'
-import { EKMAN_ANCHORS } from './anchors'
+// Per-window shift for sequential Ax-scored windows.
+import { EKMAN_ANCHORS, type AnchorScores } from './anchors'
+
+export interface ScoredEmotionResult {
+  scores: AnchorScores
+  dominant: string
+  confidence: number
+  summary: string
+  method: string
+}
 
 export interface WindowShift {
   comparedToWindowId: number | null
-  deltas: Record<BaselineEmotion, number>
+  deltas: Record<string, number>
   strongest: {
-    emotion: BaselineEmotion
+    emotion: string
     delta: number
   } | null
   severity: 'none' | 'low' | 'medium' | 'high'
 }
 
-const emotions: readonly BaselineEmotion[] = EKMAN_ANCHORS
+const emotions = EKMAN_ANCHORS
 
 export function computeShift(
   previousWindowId: number | null,
-  previous: BaselineResult | null,
-  current: BaselineResult,
+  previous: ScoredEmotionResult | null,
+  current: ScoredEmotionResult,
 ): WindowShift {
   const deltas = Object.fromEntries(
     emotions.map((emotion) => [
       emotion,
       previous ? roundDelta(current.scores[emotion] - previous.scores[emotion]) : 0,
     ]),
-  ) as Record<BaselineEmotion, number>
+  ) as Record<string, number>
   const strongestEmotion = emotions.reduce((best, emotion) =>
     Math.abs(deltas[emotion]) > Math.abs(deltas[best]) ? emotion : best,
   )

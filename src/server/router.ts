@@ -8,7 +8,7 @@ import { searchContacts } from '@/lib/contacts/search'
 import { getRunWindows, listRuns } from '@/lib/api/runs'
 import { getWindowMessages } from '@/lib/api/messages'
 import { getLabelingWindow, listLabelingWindows, saveWindowLabel } from '@/lib/api/labels'
-import { createBaselineRun } from '@/lib/emotion/run-baseline'
+import { createAxAnalysisRun } from '@/lib/emotion/run-analysis'
 import { EKMAN_ANCHORS } from '@/lib/emotion/anchors'
 import { answerConversation } from '@/lib/chat/answer'
 import { getServerSyncEngine } from '@/lib/sync/server-sync'
@@ -22,7 +22,7 @@ const CONTACTS_SETTINGS = 'x-apple.systempreferences:com.apple.preference.securi
 const emotionAnchorInput = z.enum(EKMAN_ANCHORS)
 const ambiguityInput = z.enum(['low', 'medium', 'high'])
 
-const baselineOptions = z
+const analysisOptions = z
   .object({
     mode: z.enum(['absolute-message-count', 'comparative-message-count']),
     contextMessages: z.number(),
@@ -109,13 +109,13 @@ export const appRouter = router({
     .input(saveWindowLabelInput)
     .mutation(({ input }) => saveWindowLabel(getDb(), input)),
 
-  createBaselineRun: publicProcedure
-    .input(z.object({ conversationId: z.number(), options: baselineOptions.optional() }))
-    .mutation(({ input }) => {
+  createAnalysisRun: publicProcedure
+    .input(z.object({ conversationId: z.number(), options: analysisOptions.optional() }))
+    .mutation(async ({ input }) => {
       const db = getDb()
-      const { runId } = createBaselineRun(db, input.conversationId, input.options ?? {})
+      const { runId } = await createAxAnalysisRun(db, input.conversationId, input.options ?? {})
       const run = listRuns(db, input.conversationId).find((item) => item.id === runId)
-      if (!run) throw new Error(`Baseline run ${runId} was created but could not be read back`)
+      if (!run) throw new Error(`Analysis run ${runId} was created but could not be read back`)
       return run
     }),
 

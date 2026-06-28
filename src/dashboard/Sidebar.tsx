@@ -49,7 +49,7 @@ export default function Sidebar({
         <div className="sidebar-note">
           {searching
             ? `No people match “${searchQuery.trim()}”.`
-            : 'No analyzed conversations yet — recompute one to see it here.'}
+            : 'No conversations yet. Sync messages to populate the dashboard.'}
         </div>
       )}
 
