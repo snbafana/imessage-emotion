@@ -24,20 +24,17 @@ export default function AppView() {
     void refresh()
   }, [refresh])
 
-  useEffect(() => {
-    if (status && !status.ready && setupComplete) {
-      window.localStorage.removeItem(SETUP_COMPLETE_KEY)
-      setSetupComplete(false)
-    }
-  }, [setupComplete, status])
-
   const continueToDashboard = useCallback(() => {
     window.localStorage.setItem(SETUP_COMPLETE_KEY, 'true')
     setSetupComplete(true)
     setShowSettings(false)
   }, [])
 
-  if (showSettings || !setupComplete || !status?.ready) {
+  // Continue always proceeds to the dashboard, regardless of local sync/permission
+  // readiness — anyone can click through and run on seeded mock data
+  // (see `pnpm seed:mock`). Onboarding only shows before first Continue, or when
+  // the user explicitly reopens it via Settings.
+  if (showSettings || !setupComplete) {
     return (
       <Onboarding
         api={api}

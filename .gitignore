@@ -48,3 +48,6 @@ native/**/.build/
 
 # local Claude Code skill cache
 .claude/
+
+# generated Harbor eval tasks (contain real message text — keep local)
+evals/harbor/tasks/

@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
+    "seed:mock": "node --loader ./scripts/ts-strip-loader.mjs scripts/seed-mock-data.mjs",
     "smoke:onboarding-status": "node --loader ./scripts/ts-strip-loader.mjs scripts/smoke-onboarding-status.mjs",
     "smoke:local-app-db": "node --loader ./scripts/ts-strip-loader.mjs scripts/smoke-local-app-db.mjs",
     "smoke:ax-native-db": "node scripts/smoke-ax-native-db.mjs",
@@ -31,6 +32,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.7.5",
     "@types/react": "^18.3.11",

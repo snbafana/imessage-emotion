@@ -18,6 +18,8 @@ import { computeShift, type ScoredEmotionResult, type WindowShift } from './shif
 export interface CreateAxRunOptions extends Partial<RunWindowConfig> {
   scorerConfig?: AxScorerConfig & Record<string, unknown>
   scorer?: AxWindowScorer
+  // How many windows to score concurrently. Defaults to DEFAULT_SCORE_CONCURRENCY.
+  concurrency?: number
 }
 
 export interface CreateAxRunResult {
@@ -72,6 +74,11 @@ type ResultRow = {
 
 export const AX_METHOD_KEY = 'ax-llm-v1'
 
+// Default number of windows scored in parallel. Windows are independent LLM
+// calls, so a small pool turns an N-deep serial chain into ~N/pool batches
+// without overwhelming the provider's rate limits.
+export const DEFAULT_SCORE_CONCURRENCY = 8
+
 export const DEFAULT_AX_RUN_CONFIG: RunWindowConfig = {
   mode: 'comparative-message-count',
   contextMessages: 80,
@@ -103,10 +110,21 @@ export async function createAxAnalysisRun(
   options: CreateAxRunOptions = {},
 ): Promise<CreateAxAnalysisRunResult> {
   const { runId, windowCount } = createAxRun(db, conversationId, options)
+  const summary = await finishAxRun(db, runId, options)
+  return { runId, windowCount, summary }
+}
+
+// Score an already-created run to completion and mark it complete. Marks the run
+// failed (and rethrows) only if scoring could not produce a single window — a
+// single window error no longer sinks the whole run.
+export async function finishAxRun(
+  db: AppDatabase,
+  runId: number,
+  options: Pick<CreateAxRunOptions, 'scorer' | 'concurrency'> = {},
+): Promise<AxRunSummary> {
   try {
     await scoreAxRun(db, runId, options)
-    const summary = completeAxRun(db, runId)
-    return { runId, windowCount, summary }
+    return completeAxRun(db, runId)
   } catch (error) {
     failRun(db, runId, error)
     throw error
@@ -116,12 +134,127 @@ export async function createAxAnalysisRun(
 export async function scoreAxRun(
   db: AppDatabase,
   runId: number,
-  options: Pick<CreateAxRunOptions, 'scorer'> = {},
+  options: Pick<CreateAxRunOptions, 'scorer' | 'concurrency'> = {},
 ): Promise<void> {
+  const run = getRun(db, runId)
+  const config = parseJsonRecord(run.scorer_config_json) as AxScorerConfig
   const windows = selectRunWindows(db, runId)
-  for (const window of windows) {
-    await scoreAxRunWindow(db, runId, window.id, options)
+  const scorer = options.scorer ?? scoreWindowWithAx
+  const concurrency = Math.max(1, options.concurrency ?? DEFAULT_SCORE_CONCURRENCY)
+
+  // Each window is scored independently and in parallel: it already carries its
+  // own context messages, so we no longer thread prior-window scores through a
+  // serial loop. Cross-window shift deltas are recomputed deterministically in a
+  // second ordered pass below.
+  let scored = 0
+  let lastError: unknown = null
+  await runWithConcurrency(windows, concurrency, async (window) => {
+    try {
+      await scoreWindowStandalone(db, run.conversation_id, runId, window, config, scorer)
+      scored += 1
+    } catch (error) {
+      lastError = error
+    }
+  })
+
+  if (scored === 0 && windows.length > 0) {
+    throw lastError instanceof Error ? lastError : new Error('No analysis windows could be scored')
   }
+
+  recomputeRunShifts(db, runId)
+}
+
+// Score a single window with no dependency on any other window, persisting the
+// result. Shift deltas are intentionally left for recomputeRunShifts.
+async function scoreWindowStandalone(
+  db: AppDatabase,
+  conversationId: number,
+  runId: number,
+  window: WindowRow,
+  config: AxScorerConfig,
+  scorer: AxWindowScorer,
+): Promise<void> {
+  const startedAt = Date.now()
+  try {
+    const result = await scorer(
+      {
+        runId,
+        windowId: window.id,
+        ordinal: window.ordinal,
+        priorScores: averageScores([]),
+        messages: selectWindowMessages(db, conversationId, window),
+      },
+      config,
+    )
+    db.prepare(
+      `
+      UPDATE windows
+      SET result_json = ?,
+        status = 'completed',
+        latency_ms = ?,
+        error = NULL
+      WHERE id = ?
+    `,
+    ).run(JSON.stringify(result), Date.now() - startedAt, window.id)
+  } catch (error) {
+    db.prepare(
+      `
+      UPDATE windows
+      SET status = 'error',
+        latency_ms = ?,
+        error = ?
+      WHERE id = ?
+    `,
+    ).run(Date.now() - startedAt, error instanceof Error ? error.message : String(error), window.id)
+    throw error
+  }
+}
+
+// Recompute each completed window's shift relative to the previous completed
+// window in ordinal order. Pure DB work, wrapped in one transaction.
+function recomputeRunShifts(db: AppDatabase, runId: number): void {
+  const rows = db
+    .prepare(
+      `
+      SELECT id, result_json
+      FROM windows
+      WHERE run_id = ?
+        AND status = 'completed'
+      ORDER BY ordinal
+    `,
+    )
+    .all(runId) as ResultRow[]
+  const update = db.prepare(`UPDATE windows SET shift_json = ? WHERE id = ?`)
+  let previousWindowId: number | null = null
+  let previousResult: ScoredEmotionResult | null = null
+  const apply = db.transaction(() => {
+    for (const row of rows) {
+      const result = parseResult(row.result_json)
+      if (!result) continue
+      const shift = computeShift(previousWindowId, previousResult, result)
+      update.run(JSON.stringify(shift), row.id)
+      previousWindowId = row.id
+      previousResult = result
+    }
+  })
+  apply()
+}
+
+// Run worker over items with at most `limit` in flight at once.
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let cursor = 0
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      await worker(items[index])
+    }
+  })
+  await Promise.all(runners)
 }
 
 export async function scoreAxRunWindow(
