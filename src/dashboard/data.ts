@@ -1,6 +1,6 @@
 import type { ImessageEmotionApi, WindowMessageSlice } from '../lib/api/types'
 
-type EmotionKey = 'warmth' | 'joy' | 'trust' | 'stress' | 'friction' | 'sadness'
+export type EmotionKey = 'warmth' | 'joy' | 'trust' | 'stress' | 'friction' | 'sadness'
 
 export const EMOTIONS: Record<EmotionKey, { label: string; color: string; ink: string }> = {
   warmth: { label: 'Warmth', color: 'oklch(0.69 0.12 182)', ink: 'oklch(0.52 0.12 182)' },

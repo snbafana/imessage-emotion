@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
+import ChatPanel from './ChatPanel'
 import EmotionTimeline from './EmotionTimeline'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
@@ -86,9 +87,6 @@ export default function Dashboard() {
       setRunLoading(true)
       try {
         let nextRuns: RunView[] = []
-        if (api?.getConversation) {
-          nextRuns = normalizeRuns(await api.getConversation(Number(conversation.rawId)))
-        }
         if (api?.listRuns) {
           nextRuns = normalizeRuns(await api.listRuns(Number(conversation.rawId)))
         }
@@ -188,10 +186,10 @@ export default function Dashboard() {
     setActionStatus('Messages synced.')
   }
 
-  async function createBaselineRun() {
-    if (!api?.createBaselineRun || !selectedConversation) return
+  async function analyzeConversation() {
+    if (!api?.analyzeConversation || !selectedConversation) return
     setActionStatus('Creating baseline run...')
-    await api.createBaselineRun(Number(selectedConversation.rawId))
+    await api.analyzeConversation(Number(selectedConversation.rawId))
     await reloadRun(selectedConversation)
     setActionStatus('Baseline run created.')
   }
@@ -236,8 +234,8 @@ export default function Dashboard() {
             </Button>
             <Button
               className="recalc"
-              disabled={!selectedConversation || !api?.createBaselineRun}
-              onClick={run ? refreshRun : createBaselineRun}
+              disabled={!selectedConversation || !api?.analyzeConversation}
+              onClick={run ? refreshRun : analyzeConversation}
             >
               <RecalcIcon />
               {run ? 'Refresh Run' : 'Create Baseline Run'}
@@ -262,6 +260,12 @@ export default function Dashboard() {
               focalMessages={focalMessages}
               loading={windowLoading}
               error={windowError}
+            />
+            <ChatPanel
+              conversationId={selectedConversation ? Number(selectedConversation.rawId) : undefined}
+              runId={run ? Number(run.rawId) : undefined}
+              windowId={selectedWindow ? Number(selectedWindow.rawId) : null}
+              label={selectedConversation?.title}
             />
           </div>
         </div>

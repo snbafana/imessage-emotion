@@ -1,5 +1,40 @@
-import type { RunView, WindowView } from './data'
+import type { EmotionKey, RunView, WindowView } from './data'
 import { EMOTIONS, gradientFor, runStateLabel, timelineBlocks } from './data'
+
+const POSITIVE_EMOTIONS = new Set<EmotionKey>(['warmth', 'joy', 'trust'])
+
+// Per-window valence: positive emotions lift, tense ones drop. Returns ~[-1, 1].
+function windowValence(composition: { emotion: EmotionKey; weight: number }[]): number {
+  return composition.reduce(
+    (sum, { emotion, weight }) => sum + (POSITIVE_EMOTIONS.has(emotion) ? weight : -weight),
+    0,
+  )
+}
+
+// Smooth Catmull-Rom path through the per-window valence points (high-fidelity
+// overlay on the discrete blocks), in a 1000x210 non-scaling viewBox.
+function valencePath(valences: number[]): string {
+  if (valences.length === 0) return ''
+  const points: [number, number][] = valences.map((v, i) => {
+    const x = ((i + 0.5) / valences.length) * 1000
+    const y = Math.min(198, Math.max(12, 110 - v * 82))
+    return [x, y]
+  })
+  if (points.length === 1) return `M${points[0][0]},${points[0][1]} L1000,${points[0][1]}`
+  let d = `M${points[0][0]},${points[0][1]}`
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] ?? points[i]
+    const p1 = points[i]
+    const p2 = points[i + 1]
+    const p3 = points[i + 2] ?? p2
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6
+    d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`
+  }
+  return d
+}
 
 export default function EmotionTimeline({
   run,
@@ -18,6 +53,9 @@ export default function EmotionTimeline({
 }) {
   const stateLabel = runStateLabel(run, windows)
   const blocks = timelineBlocks(windows)
+  const hasScores = blocks.some((block) => block.composition.length > 0)
+  const valenceLine =
+    hasScores && blocks.length > 1 ? valencePath(blocks.map((b) => windowValence(b.composition))) : ''
 
   return (
     <section className="timeline-panel">
@@ -67,6 +105,35 @@ export default function EmotionTimeline({
                   </button>
                 )
               })}
+
+              {valenceLine ? (
+                <div className="line-overlay">
+                  <svg
+                    width="100%"
+                    height="210"
+                    viewBox="0 0 1000 210"
+                    preserveAspectRatio="none"
+                    fill="none"
+                  >
+                    <path
+                      d={valenceLine}
+                      stroke="#fff"
+                      strokeWidth={6}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <path
+                      d={valenceLine}
+                      stroke="#0a0a0b"
+                      strokeWidth={2.25}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </svg>
+                </div>
+              ) : null}
             </div>
 
             <div className="axis">

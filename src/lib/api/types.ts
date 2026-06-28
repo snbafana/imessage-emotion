@@ -1,10 +1,8 @@
 export const API_CHANNELS = {
-  getSyncStatus: 'imessage-emotion:get-sync-status',
   syncMessagesNow: 'imessage-emotion:sync-messages-now',
-  syncContactsNow: 'imessage-emotion:sync-contacts-now',
   listConversations: 'imessage-emotion:list-conversations',
   getConversation: 'imessage-emotion:get-conversation',
-  createBaselineRun: 'imessage-emotion:create-baseline-run',
+  analyzeConversation: 'imessage-emotion:analyze-conversation',
   listRuns: 'imessage-emotion:list-runs',
   getRunWindows: 'imessage-emotion:get-run-windows',
   getWindowMessages: 'imessage-emotion:get-window-messages',
@@ -229,12 +227,10 @@ export interface AskConversationInput {
 export type ConversationChatResponse = import('../chat/answer').ConversationChatResponse
 
 export interface ImessageEmotionApi {
-  getSyncStatus(): Promise<SyncStatus>
   syncMessagesNow(): Promise<SyncStatus>
-  syncContactsNow(): Promise<SyncStatus>
   listConversations(): Promise<ConversationSummary[]>
   getConversation(conversationId: number): Promise<ConversationDetail | null>
-  createBaselineRun(conversationId: number, options?: BaselineRunOptions): Promise<RunSummary>
+  analyzeConversation(conversationId: number, options?: BaselineRunOptions): Promise<RunSummary>
   listRuns(conversationId: number): Promise<RunSummary[]>
   getRunWindows(runId: number): Promise<AnalysisWindow[]>
   getWindowMessages(windowId: number, slice?: WindowMessageSlice): Promise<WindowMessage[]>

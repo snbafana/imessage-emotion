@@ -8,14 +8,12 @@ import {
 } from '../src/lib/api/types'
 
 const appApi: ImessageEmotionApi = {
-  getSyncStatus: () => ipcRenderer.invoke(API_CHANNELS.getSyncStatus),
   syncMessagesNow: () => ipcRenderer.invoke(API_CHANNELS.syncMessagesNow),
-  syncContactsNow: () => ipcRenderer.invoke(API_CHANNELS.syncContactsNow),
   listConversations: () => ipcRenderer.invoke(API_CHANNELS.listConversations),
   getConversation: (conversationId: number) =>
     ipcRenderer.invoke(API_CHANNELS.getConversation, conversationId),
-  createBaselineRun: (conversationId: number, options?: BaselineRunOptions) =>
-    ipcRenderer.invoke(API_CHANNELS.createBaselineRun, conversationId, options),
+  analyzeConversation: (conversationId: number, options?: BaselineRunOptions) =>
+    ipcRenderer.invoke(API_CHANNELS.analyzeConversation, conversationId, options),
   listRuns: (conversationId: number) => ipcRenderer.invoke(API_CHANNELS.listRuns, conversationId),
   getRunWindows: (runId: number) => ipcRenderer.invoke(API_CHANNELS.getRunWindows, runId),
   getWindowMessages: (windowId: number, slice?: WindowMessageSlice) =>

@@ -5,12 +5,10 @@ import { fileURLToPath } from 'node:url'
 const root = dirname(dirname(fileURLToPath(import.meta.url)))
 
 const methods = [
-  'getSyncStatus',
   'syncMessagesNow',
-  'syncContactsNow',
   'listConversations',
   'getConversation',
-  'createBaselineRun',
+  'analyzeConversation',
   'listRuns',
   'getRunWindows',
   'getWindowMessages',

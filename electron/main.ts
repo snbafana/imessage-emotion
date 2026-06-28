@@ -192,13 +192,8 @@ app.on('activate', () => {
   }
 })
 
-ipcMain.handle(API_CHANNELS.getSyncStatus, () => getSyncStatus())
 ipcMain.handle(API_CHANNELS.syncMessagesNow, async () => {
   lastSyncStatus = await (imessageSync?.syncNow() ?? Promise.resolve(lastSyncStatus))
-  return getSyncStatus()
-})
-ipcMain.handle(API_CHANNELS.syncContactsNow, async () => {
-  lastContactsStatus = await (contactsSync?.syncNow() ?? Promise.resolve(lastContactsStatus))
   return getSyncStatus()
 })
 ipcMain.handle(API_CHANNELS.listConversations, () => listConversations(requireDatabase()))
@@ -206,7 +201,7 @@ ipcMain.handle(API_CHANNELS.getConversation, (_event, conversationId: number) =>
   getConversation(requireDatabase(), conversationId),
 )
 ipcMain.handle(
-  API_CHANNELS.createBaselineRun,
+  API_CHANNELS.analyzeConversation,
   (_event, conversationId: number, options?: BaselineRunOptions) =>
     createBaselineRunSummary(conversationId, options),
 )
