@@ -1493,3 +1493,123 @@
   border-radius: 8px;
   padding: 8px 11px;
 }
+
+/* ---------- View toggle ---------- */
+.view-toggle {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--hair);
+  border-radius: 9px;
+  background: var(--fill);
+}
+.view-toggle button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.view-toggle button[data-selected] {
+  background: #fff;
+  border-color: var(--hair);
+  color: var(--ink);
+}
+.view-toggle button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- Cross-conversation overview ---------- */
+.overview-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+}
+.overview-plot {
+  position: relative;
+  width: 100%;
+  height: 240px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--hair);
+  background: #fff;
+}
+.overview-plot .gridline.baseline {
+  background: var(--hair);
+}
+.overview-axis-label {
+  position: absolute;
+  right: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.overview-axis-label.top {
+  top: 4px;
+}
+.overview-axis-label.bottom {
+  bottom: 4px;
+}
+.overview-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.overview-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.overview-row:hover {
+  background: var(--surface-2);
+}
+.overview-row.selected {
+  border-color: var(--hair);
+  background: var(--surface-2);
+}
+.overview-row .legend-swatch {
+  width: 22px;
+  height: 3px;
+}
+.overview-row-name {
+  flex: 0 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.overview-row-meta {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.overview-caption {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}

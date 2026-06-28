@@ -8,6 +8,7 @@ import EmotionTimeline from './EmotionTimeline'
 import type { AnalysisSetupPlan, AnalysisSetupValue } from './EmotionTimeline'
 import ChatPanel from './ChatPanel'
 import Inspector from './Inspector'
+import Overview, { type OverviewEntry } from './Overview'
 import Sidebar from './Sidebar'
 import { getDashboardApi } from './api'
 import {
@@ -19,6 +20,7 @@ import {
   normalizeConversations,
   normalizeRuns,
   normalizeWindows,
+  overviewSeries,
   type ConversationView,
   type MessageView,
   type RunView,
@@ -28,6 +30,12 @@ import { RecalcIcon, SettingsIcon } from './icons'
 import type { AnalysisRunOptions, SyncStatus } from '../lib/api/types'
 import { planCappedRunWindowConfig, planRunWindowRanges } from '../lib/windows/windows'
 import './dashboard.css'
+
+// How many analyzed conversations the cross-conversation overview will chart.
+// The brief asks for a few (3-5); we cap the fan-out of run-window fetches here.
+const OVERVIEW_CONVERSATION_LIMIT = 6
+
+type DashboardView = 'overview' | 'detail'
 
 const DEFAULT_ANALYSIS_SETUP: AnalysisSetupValue = {
   planner: 'capped',
@@ -67,6 +75,12 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
   // null = no active search (show everything); a Set = the conversation ids
   // whose participants matched the contacts FTS query.
   const [matchedConversationIds, setMatchedConversationIds] = useState<Set<string> | null>(null)
+  // Cross-conversation overview: chart the valence arc of every analyzed
+  // conversation side by side. 'detail' is the single-conversation drilldown.
+  const [view, setView] = useState<DashboardView>('overview')
+  const [overviewEntries, setOverviewEntries] = useState<OverviewEntry[]>([])
+  const [overviewLoading, setOverviewLoading] = useState(false)
+  const [overviewError, setOverviewError] = useState<string | null>(null)
 
   const visibleConversations = useMemo(
     () => {
@@ -388,6 +402,56 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
     }
   }, [analysisSetup.model, api, liveRunId, selectedConversation])
 
+  // Load the cross-conversation overview: for each conversation whose latest run
+  // is scored, fetch its windows and reduce them to a valence arc. Refreshes when
+  // the conversation list changes (e.g. after an analysis run completes).
+  useEffect(() => {
+    if (view !== 'overview') return
+    const getRunWindowsFn = api?.getRunWindows
+    if (!getRunWindowsFn) return
+
+    const candidates = conversations
+      .filter((conversation) => conversation.latestRun?.state === 'scored')
+      .slice(0, OVERVIEW_CONVERSATION_LIMIT)
+
+    if (candidates.length === 0) {
+      setOverviewEntries([])
+      setOverviewError(null)
+      setOverviewLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setOverviewLoading(true)
+    setOverviewError(null)
+    void Promise.all(
+      candidates.map(async (conversation) => {
+        const run = conversation.latestRun as RunView
+        const windows = normalizeWindows(await getRunWindowsFn(Number(run.rawId)))
+        return { conversation, run, series: overviewSeries(windows) }
+      }),
+    )
+      .then((entries) => {
+        if (cancelled) return
+        setOverviewEntries(entries.filter((entry) => entry.series.points.length > 0))
+        setOverviewLoading(false)
+      })
+      .catch((error) => {
+        if (cancelled) return
+        setOverviewError(error instanceof Error ? error.message : 'Could not load the overview.')
+        setOverviewLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [api, conversations, view])
+
+  const openConversationDetail = useCallback((conversationId: string) => {
+    setActiveId(conversationId)
+    setView('detail')
+  }, [])
+
   return (
     <div className="dashboard">
       <Sidebar
@@ -395,7 +459,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
         conversations={visibleConversations}
         loading={conversationLoading}
         error={conversationError}
-        onSelect={setActiveId}
+        onSelect={openConversationDetail}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -420,6 +484,23 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
             )}
           </div>
           <div className="header-actions">
+            <div className="view-toggle" role="group" aria-label="Dashboard view">
+              <button
+                type="button"
+                data-selected={view === 'overview' ? '' : undefined}
+                onClick={() => setView('overview')}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                data-selected={view === 'detail' ? '' : undefined}
+                disabled={!selectedConversation}
+                onClick={() => setView('detail')}
+              >
+                Detail
+              </button>
+            </div>
             {onOpenSettings && (
               <Button className="recalc secondary" onClick={onOpenSettings}>
                 <SettingsIcon />
@@ -446,42 +527,54 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
         </header>
 
         <div className="body">
-          <EmotionTimeline
-            run={run}
-            runs={runs}
-            windows={windows}
-            selectedId={selectedWindowId}
-            selectedRunId={run?.id ?? null}
-            loading={runLoading}
-            error={runError}
-            conversation={selectedConversation}
-            setup={analysisSetup}
-            setupPlan={setupPlan}
-            setupRunning={analysisRunning}
-            onChangeSetup={(patch) =>
-              setAnalysisSetup((current) => ({ ...current, ...patch }))
-            }
-            onRunSetup={startAxRun}
-            onSelectRun={selectRun}
-            onSelectWindow={setSelectedWindowId}
-          />
-          <div className="lower-row">
-            <Inspector
-              run={run}
-              window={selectedWindow}
-              contextMessages={contextMessages}
-              focalMessages={focalMessages}
-              loading={windowLoading}
-              error={windowError}
+          {view === 'overview' ? (
+            <Overview
+              entries={overviewEntries}
+              loading={overviewLoading}
+              error={overviewError}
+              activeId={activeId}
+              onSelect={openConversationDetail}
             />
-            <ChatPanel
-              agent={chat}
-              conversationId={selectedConversation ? Number(selectedConversation.rawId) : undefined}
-              runId={run ? Number(run.rawId) : undefined}
-              windowId={selectedWindow ? Number(selectedWindow.rawId) : null}
-              label={selectedConversation?.title}
-            />
-          </div>
+          ) : (
+            <>
+              <EmotionTimeline
+                run={run}
+                runs={runs}
+                windows={windows}
+                selectedId={selectedWindowId}
+                selectedRunId={run?.id ?? null}
+                loading={runLoading}
+                error={runError}
+                conversation={selectedConversation}
+                setup={analysisSetup}
+                setupPlan={setupPlan}
+                setupRunning={analysisRunning}
+                onChangeSetup={(patch) =>
+                  setAnalysisSetup((current) => ({ ...current, ...patch }))
+                }
+                onRunSetup={startAxRun}
+                onSelectRun={selectRun}
+                onSelectWindow={setSelectedWindowId}
+              />
+              <div className="lower-row">
+                <Inspector
+                  run={run}
+                  window={selectedWindow}
+                  contextMessages={contextMessages}
+                  focalMessages={focalMessages}
+                  loading={windowLoading}
+                  error={windowError}
+                />
+                <ChatPanel
+                  agent={chat}
+                  conversationId={selectedConversation ? Number(selectedConversation.rawId) : undefined}
+                  runId={run ? Number(run.rawId) : undefined}
+                  windowId={selectedWindow ? Number(selectedWindow.rawId) : null}
+                  label={selectedConversation?.title}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

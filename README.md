@@ -29,9 +29,12 @@ the machine.
    credentials or model errors fail visibly.
 3. **Detect shifts** — windows are compared against the prior conversation state
    to flag sharp emotional moves and surface the strongest drivers.
-4. **Explore** — the dashboard shows the emotion timeline (colored composition
-   blocks + a valence line); the chat panel answers questions about a selected
-   window, grounded in its messages.
+4. **Explore** — the dashboard opens on a cross-conversation **Overview** that
+   charts the net-valence arc of every analyzed conversation side by side (with
+   sharp-shift markers), so you can compare 3-5 relationships at a glance. Select
+   one to drop into its **Detail** view: the full emotion timeline (colored
+   composition blocks + per-emotion lines) plus a chat panel that answers
+   questions about a selected window, grounded in its messages.
 
 ## Run it
 

@@ -26,7 +26,6 @@ export interface AxWindowInput {
   runId: number
   windowId: number
   ordinal: number
-  priorScores: AnchorScores
   messages: AxWindowMessage[]
 }
 
@@ -70,7 +69,6 @@ const DEFAULT_PROMPT_KEY = 'ax-ekman-window-v1'
 
 const axWindowSignature = ax(`
   taskContext:string "Instructions and JSON contract",
-  priorScoresJson:string "Prior conversation-specific rolling scores as JSON",
   windowRef:string "Stable local window reference",
   windowText:string "Bounded private iMessage window with local message refs"
   ->
@@ -96,7 +94,6 @@ export async function scoreWindowWithAx(
   const formatted = formatMessages(input.messages)
   const output = (await axWindowSignature.forward(service(resolved), {
     taskContext: taskContext(resolved),
-    priorScoresJson: JSON.stringify(input.priorScores),
     windowRef: `run:${input.runId}:window:${input.ordinal}`,
     windowText: formatted.map((message) => message.line).join('\n'),
   })) as AxOutput
@@ -171,7 +168,7 @@ function taskContext(config: Required<AxScorerConfig>): string {
     `Use exactly these Ekman/RoBERTa dimensions: ${EKMAN_ANCHORS.join(', ')}.`,
     'Return evidenceMessageRefs as local refs like m0042 only.',
     'Return rationale and scoreRationalesJson without quoting or paraphrasing private message text.',
-    'Use priorScoresJson only as the prior conversation state; score the current focal window from the provided messages.',
+    'The window already contains the prior conversation as old_context messages; score the new_focal messages in that context.',
   ].join('\n')
 }
 

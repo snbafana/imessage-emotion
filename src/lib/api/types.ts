@@ -254,11 +254,3 @@ export interface SaveWindowLabelInput {
   notes?: string | null
 }
 
-export interface AskConversationInput {
-  conversationId: number
-  question: string
-  runId: number
-  windowId: number
-}
-
-export type ConversationChatResponse = import('../chat/answer').ConversationChatResponse
