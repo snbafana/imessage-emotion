@@ -1,14 +1,17 @@
 'use client'
 
-import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, KeyboardEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@base-ui/react/button'
 import type {
   EveMessageData,
+  EveMessageInputRequest,
   EveMessagePart,
   UseEveAgentHelpers,
 } from 'eve/react'
-import type { HandleMessageStreamEvent } from 'eve/client'
+import type { HandleMessageStreamEvent, InputResponse } from 'eve/client'
 import { CollapseIcon, ExpandIcon, SendIcon } from './icons'
+
+type RespondFn = (response: InputResponse) => void
 
 type ChatPanelProps = {
   agent: UseEveAgentHelpers<EveMessageData>
@@ -114,6 +117,295 @@ function toolKind(part: DynamicToolPart): string {
   return part.toolMetadata?.eve?.kind?.replace(/-/g, ' ') ?? 'tool call'
 }
 
+// --- Lightweight, dependency-free Markdown rendering --------------------------
+// The eve agent answers in Markdown; we render the common subset it emits
+// (headings, bold/italic, inline + fenced code, lists, quotes, links, rules)
+// without dangerouslySetInnerHTML — every node is a real React element.
+
+function renderInline(text: string, baseKey = 0): ReactNode[] {
+  const nodes: ReactNode[] = []
+  const pattern =
+    /(`[^`]+`)|(\*\*[\s\S]+?\*\*|__[\s\S]+?__)|(\*[^*\n]+?\*|_[^_\n]+?_)|(\[[^\]]+\]\([^)\s]+\))/g
+  let last = 0
+  let key = baseKey
+  let match: RegExpExecArray | null
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > last) nodes.push(text.slice(last, match.index))
+    const token = match[0]
+    if (match[1]) {
+      nodes.push(
+        <code key={`i${key++}`} className="md-code">
+          {token.slice(1, -1)}
+        </code>,
+      )
+    } else if (match[2]) {
+      nodes.push(<strong key={`i${key++}`}>{renderInline(token.slice(2, -2), key * 100)}</strong>)
+    } else if (match[3]) {
+      nodes.push(<em key={`i${key++}`}>{renderInline(token.slice(1, -1), key * 100)}</em>)
+    } else if (match[4]) {
+      const link = /^\[([^\]]+)\]\(([^)\s]+)\)$/.exec(token)
+      if (link) {
+        nodes.push(
+          <a key={`i${key++}`} href={link[2]} target="_blank" rel="noreferrer">
+            {link[1]}
+          </a>,
+        )
+      } else {
+        nodes.push(token)
+      }
+    }
+    last = match.index + token.length
+  }
+  if (last < text.length) nodes.push(text.slice(last))
+  return nodes
+}
+
+function renderInlineLines(text: string): ReactNode[] {
+  const lines = text.split('\n')
+  const out: ReactNode[] = []
+  lines.forEach((line, idx) => {
+    if (idx > 0) out.push(<br key={`br${idx}`} />)
+    out.push(...renderInline(line, idx * 1000))
+  })
+  return out
+}
+
+const HR_RE = /^\s*([-*_])(\s*\1){2,}\s*$/
+const HEADING_RE = /^(#{1,6})\s+(.*)$/
+const UL_RE = /^\s*[-*+]\s+/
+const OL_RE = /^\s*\d+[.)]\s+/
+const QUOTE_RE = /^\s*>\s?/
+const FENCE_RE = /^\s*```/
+
+function parseMarkdown(src: string): ReactNode[] {
+  const lines = src.replace(/\r\n/g, '\n').split('\n')
+  const out: ReactNode[] = []
+  let i = 0
+  let key = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    if (FENCE_RE.test(line)) {
+      const buf: string[] = []
+      i++
+      while (i < lines.length && !FENCE_RE.test(lines[i])) {
+        buf.push(lines[i])
+        i++
+      }
+      i++ // closing fence
+      out.push(
+        <pre key={key++} className="md-pre">
+          <code>{buf.join('\n')}</code>
+        </pre>,
+      )
+      continue
+    }
+    if (line.trim() === '') {
+      i++
+      continue
+    }
+    if (HR_RE.test(line)) {
+      out.push(<hr key={key++} className="md-hr" />)
+      i++
+      continue
+    }
+    const heading = HEADING_RE.exec(line)
+    if (heading) {
+      const level = Math.min(heading[1].length, 6)
+      const Tag = `h${level}` as 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
+      out.push(
+        <Tag key={key++} className={`md-h md-h${level}`}>
+          {renderInline(heading[2].trim())}
+        </Tag>,
+      )
+      i++
+      continue
+    }
+    if (QUOTE_RE.test(line)) {
+      const buf: string[] = []
+      while (i < lines.length && QUOTE_RE.test(lines[i])) {
+        buf.push(lines[i].replace(QUOTE_RE, ''))
+        i++
+      }
+      out.push(
+        <blockquote key={key++} className="md-quote">
+          {parseMarkdown(buf.join('\n'))}
+        </blockquote>,
+      )
+      continue
+    }
+    if (UL_RE.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && UL_RE.test(lines[i])) {
+        items.push(lines[i].replace(UL_RE, ''))
+        i++
+      }
+      out.push(
+        <ul key={key++} className="md-ul">
+          {items.map((item, idx) => (
+            <li key={idx}>{renderInline(item)}</li>
+          ))}
+        </ul>,
+      )
+      continue
+    }
+    if (OL_RE.test(line)) {
+      const items: string[] = []
+      while (i < lines.length && OL_RE.test(lines[i])) {
+        items.push(lines[i].replace(OL_RE, ''))
+        i++
+      }
+      out.push(
+        <ol key={key++} className="md-ol">
+          {items.map((item, idx) => (
+            <li key={idx}>{renderInline(item)}</li>
+          ))}
+        </ol>,
+      )
+      continue
+    }
+    const buf: string[] = []
+    while (
+      i < lines.length &&
+      lines[i].trim() !== '' &&
+      !FENCE_RE.test(lines[i]) &&
+      !HEADING_RE.test(lines[i]) &&
+      !QUOTE_RE.test(lines[i]) &&
+      !UL_RE.test(lines[i]) &&
+      !OL_RE.test(lines[i]) &&
+      !HR_RE.test(lines[i])
+    ) {
+      buf.push(lines[i])
+      i++
+    }
+    out.push(
+      <p key={key++} className="md-p">
+        {renderInlineLines(buf.join('\n'))}
+      </p>,
+    )
+  }
+  return out
+}
+
+function Markdown({ text }: { text: string }) {
+  const blocks = useMemo(() => parseMarkdown(text), [text])
+  return <div className="md">{blocks}</div>
+}
+
+// --- Human-in-the-loop: ask_question / approval prompts -----------------------
+
+function inputResponseSummary(
+  request: EveMessageInputRequest,
+  response: { optionId?: string; text?: string } | undefined,
+): string {
+  if (!response) return 'answered'
+  if (response.optionId) {
+    const option = request.options?.find((opt) => opt.id === response.optionId)
+    return option?.label ?? response.optionId
+  }
+  return response.text ?? 'answered'
+}
+
+function QuestionPrompt({
+  request,
+  onRespond,
+}: {
+  request: EveMessageInputRequest
+  onRespond: RespondFn
+}) {
+  const [text, setText] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+  const options = request.options ?? []
+  const allowText = request.display === 'text' || request.allowFreeform || options.length === 0
+
+  function pick(optionId: string) {
+    if (submitted) return
+    setSubmitted(true)
+    onRespond({ requestId: request.requestId, optionId })
+  }
+
+  function sendText() {
+    const value = text.trim()
+    if (!value || submitted) return
+    setSubmitted(true)
+    onRespond({ requestId: request.requestId, text: value })
+  }
+
+  function onTextKey(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key !== 'Enter' || event.shiftKey) return
+    event.preventDefault()
+    sendText()
+  }
+
+  return (
+    <div className="question-card">
+      <div className="question-head">
+        <span className="question-dot" aria-hidden />
+        <span className="question-label">eve is asking</span>
+      </div>
+      <div className="question-prompt">
+        <Markdown text={request.prompt} />
+      </div>
+      {options.length > 0 && (
+        <div className="question-options">
+          {options.map((option) => (
+            <Button
+              key={option.id}
+              className={`question-option style-${option.style ?? 'default'}`}
+              type="button"
+              disabled={submitted}
+              onClick={() => pick(option.id)}
+            >
+              <span className="qo-label">{option.label}</span>
+              {option.description && <span className="qo-desc">{option.description}</span>}
+            </Button>
+          ))}
+        </div>
+      )}
+      {allowText && (
+        <div className="question-freeform">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={onTextKey}
+            placeholder="Type your answer..."
+            aria-label={request.prompt}
+            rows={1}
+            disabled={submitted}
+          />
+          <Button
+            className="question-send"
+            type="button"
+            disabled={submitted || !text.trim()}
+            onClick={sendText}
+          >
+            <SendIcon />
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function renderAnsweredQuestion(
+  request: EveMessageInputRequest,
+  response: { optionId?: string; text?: string } | undefined,
+  denied: boolean,
+  key: number,
+) {
+  return (
+    <div key={key} className={`question-card answered${denied ? ' denied' : ''}`}>
+      <div className="question-head">
+        <span className="question-dot" aria-hidden />
+        <span className="question-label">{denied ? 'declined' : 'you answered'}</span>
+      </div>
+      <div className="question-prompt">
+        <Markdown text={request.prompt} />
+      </div>
+      <div className="question-answer">{inputResponseSummary(request, response)}</div>
+    </div>
+  )
+}
+
 function renderReasoning(part: Extract<EveMessagePart, { type: 'reasoning' }>, key: number) {
   const text = part.text.trim()
   if (!text) {
@@ -150,7 +442,18 @@ function renderAuthorization(part: AuthorizationPart, key: number) {
   )
 }
 
-function renderTool(part: DynamicToolPart, key: number) {
+function renderTool(part: DynamicToolPart, key: number, onRespond: RespondFn) {
+  const inputRequest = part.toolMetadata?.eve?.inputRequest
+  const inputResponse = part.toolMetadata?.eve?.inputResponse
+  if (inputRequest) {
+    if (part.state === 'approval-requested') {
+      return <QuestionPrompt key={key} request={inputRequest} onRespond={onRespond} />
+    }
+    if (part.state === 'approval-responded' || part.state === 'output-available' || part.state === 'output-denied') {
+      return renderAnsweredQuestion(inputRequest, inputResponse, part.state === 'output-denied', key)
+    }
+  }
+
   const meta = toolStateMeta(part.state)
   const input = compactValue(part.input, 420)
   const output = part.state === 'output-available' ? compactValue(part.output, 420) : undefined
@@ -193,17 +496,19 @@ function renderTool(part: DynamicToolPart, key: number) {
   )
 }
 
-function renderPart(part: EveMessagePart, key: number) {
+function renderPart(part: EveMessagePart, key: number, onRespond: RespondFn) {
   if (part.type === 'text') {
     return (
-      <div key={key} className={`text${part.state === 'streaming' ? ' streaming' : ''}`}>
-        {part.text}
+      <div key={key} className={`text md-text${part.state === 'streaming' ? ' streaming' : ''}`}>
+        <Markdown text={part.text} />
+        {part.state === 'streaming' && <span className="md-caret" aria-hidden />}
       </div>
     )
   }
   if (part.type === 'reasoning') return renderReasoning(part, key)
   if (part.type === 'authorization') return renderAuthorization(part, key)
-  if (part.type === 'dynamic-tool') return renderTool(part, key)
+  if (part.type === 'dynamic-tool') return renderTool(part, key, onRespond)
+  if (part.type === 'step-start') return null
   return null
 }
 
@@ -250,6 +555,22 @@ export default function ChatPanel({ agent, conversationId, runId, windowId = nul
       },
     })
   }
+
+  const respondToInput = useCallback<RespondFn>(
+    (response) => {
+      if (agent.status === 'error') return
+      void agent.send({
+        inputResponses: [response],
+        clientContext: {
+          scope,
+          conversationId: conversationId ?? null,
+          runId: runId ?? null,
+          windowId: scope === 'window' ? windowId : null,
+        },
+      })
+    },
+    [agent, scope, conversationId, runId, windowId],
+  )
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -316,7 +637,7 @@ export default function ChatPanel({ agent, conversationId, runId, windowId = nul
             </div>
           ) : (
             <div key={mi} className="turn agent">
-              {message.parts.map(renderPart)}
+              {message.parts.map((part, pi) => renderPart(part, pi, respondToInput))}
             </div>
           ),
         )}
