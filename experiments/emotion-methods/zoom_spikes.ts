@@ -56,7 +56,7 @@ function args() {
 
 function cuedSql(sql: string): Array<Record<string, unknown>> {
   const raw = execFileSync("cued", ["sql", sql], { encoding: "utf8", maxBuffer: 20 * 1024 * 1024 });
-  return JSON.parse(raw.replace(/^\(node:[^\n]+\)\s+ExperimentalWarning:[\s\S]*?\n(?=[\[{])/, ""));
+  return JSON.parse(raw.replace(/^\(node:[^\n]+\)\s+ExperimentalWarning:[\s\S]*?\n(?=[[{])/, ""));
 }
 
 function loadConversation(conversationIndex: number, maxMessages: number) {
@@ -105,7 +105,7 @@ function normalize(scores: Scores): Scores {
   return Object.fromEntries(ANCHORS.map((anchor) => [anchor, round(Math.min(1, scores[anchor] / max))])) as Scores;
 }
 
-let robertaEmotionClassifier: Promise<any> | null = null;
+let robertaEmotionClassifier: ReturnType<typeof pipeline> | null = null;
 
 async function robertaEmotion() {
   robertaEmotionClassifier ??= pipeline("text-classification", ROBERTA_EMOTION_MODEL, { dtype: "q8" });

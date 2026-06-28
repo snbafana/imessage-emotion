@@ -6,7 +6,12 @@ export interface IMessageSyncOptions {
   chatDbPath?: string
   batchSize?: number
   pollIntervalMs?: number
+  startOnCreate?: boolean
   onStatus?: (status: IMessageSyncStatus) => void
+}
+
+export interface IMessageSyncNowOptions {
+  catchUp?: boolean
 }
 
 export interface IMessageSyncStatus {
@@ -18,7 +23,8 @@ export interface IMessageSyncStatus {
 }
 
 export interface IMessageSyncController {
-  syncNow(): Promise<IMessageSyncStatus>
+  syncNow(options?: IMessageSyncNowOptions): Promise<IMessageSyncStatus>
+  getStatus(): IMessageSyncStatus
   stop(): void
 }
 
@@ -33,35 +39,51 @@ export function startIMessageSync(
   let running: Promise<IMessageSyncStatus> | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
   let lastRunHadMore = false
+  let lastStatus: IMessageSyncStatus = {
+    state: 'idle',
+    cursor: getLastImportedRowid(db),
+    importedMessages: 0,
+  }
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
   const chatDbPath = options.chatDbPath ?? process.env.IMESSAGE_CHAT_DB_PATH ?? DEFAULT_CHAT_DB_PATH
 
   function emit(status: IMessageSyncStatus): IMessageSyncStatus {
+    lastStatus = status
     options.onStatus?.(status)
     return status
   }
 
-  async function syncNow(): Promise<IMessageSyncStatus> {
-    if (running) return running
+  async function syncNow(syncOptions: IMessageSyncNowOptions = {}): Promise<IMessageSyncStatus> {
+    if (running) {
+      if (!syncOptions.catchUp) return running
+      return running.then((status) => (status.hasMore ? syncNow(syncOptions) : status))
+    }
     running = Promise.resolve()
       .then(() => {
         let cursor = getLastImportedRowid(db)
         let importedMessages = 0
+        let hasMore = false
         emit({ state: 'syncing', cursor, importedMessages })
 
         const reader = new LocalIMessageReader(chatDbPath)
         try {
-          const batch = reader.buildBatch(cursor, batchSize)
-          const result = importBatch(db, batch)
-          cursor = result.cursor
-          importedMessages = result.importedMessages
-          lastRunHadMore = batch.fetchedCount >= batchSize
+          do {
+            const batch = reader.buildBatch(cursor, batchSize)
+            const result = importBatch(db, batch)
+            cursor = result.cursor
+            importedMessages += result.importedMessages
+            hasMore = batch.fetchedCount >= batchSize
+            lastRunHadMore = hasMore
+            if (syncOptions.catchUp && hasMore) {
+              emit({ state: 'syncing', cursor, importedMessages, hasMore })
+            }
+          } while (syncOptions.catchUp && hasMore)
         } finally {
           reader.close()
         }
 
-        return emit({ state: 'idle', cursor, importedMessages, hasMore: lastRunHadMore })
+        return emit({ state: 'idle', cursor, importedMessages, hasMore })
       })
       .catch((error: unknown) => {
         recordImportError(db, error)
@@ -86,10 +108,15 @@ export function startIMessageSync(
     }, lastRunHadMore ? 0 : pollIntervalMs)
   }
 
-  void syncNow().finally(schedule)
+  if (options.startOnCreate ?? true) {
+    void syncNow().finally(schedule)
+  }
 
   return {
     syncNow,
+    getStatus() {
+      return lastStatus
+    },
     stop() {
       stopped = true
       if (timer) clearTimeout(timer)

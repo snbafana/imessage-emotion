@@ -1,26 +1,25 @@
 # iMessage Emotion
 
-Electron app foundation for analyzing emotion changes over time in local iMessage conversations.
+Next.js app foundation for analyzing emotion changes over time in local iMessage conversations.
 
 ## Data Foundation
 
-The app keeps its own SQLite database under Electron `userData` instead of repeatedly querying Apple's `chat.db` throughout the UI and analysis layers. The local tables dedupe contacts, conversations, and messages so analysis can use deterministic conversation history positions.
+The app keeps its own SQLite database under `~/Library/Application Support/imessage-emotion` instead of repeatedly querying Apple's `chat.db` throughout the UI and analysis layers. The local tables dedupe contacts, conversations, and messages so analysis can use deterministic conversation history positions.
 
 Every imported message has a `conversation_ordinal` scoped to its conversation. Ordinals are assigned by normalized chronological order using `sent_at`, source rowid, and guid as deterministic tie-breakers. Windows use ordinal boundaries first, plus start/end message IDs for evidence joins.
 
-Windows are reusable context slices. A scoring run points at existing windows through `run_windows`, so the same window can be scored by many methods without changing the underlying context.
+Windows are reusable context slices owned by analysis runs, so the same local message history can be scored by many methods without changing the underlying context.
 
 ## Included
 
 - Local iMessage reader for `chat.db` access, Apple timestamp conversion, attributed-body text fallback, and handle normalization.
 - Local Contacts resolver for display names, company/card IDs, and avatar URLs when available from macOS Contacts.
-- App-owned SQLite schema for contacts, conversations, messages, import state, windows, scorer configs, runs, results, and shifts.
-- Main-process sync loops that import new local iMessage rows and refresh local contact resolution while the Electron app is open.
-- Focused tests for ordinal assignment, overlapping windows, tail handling, and run-to-window relationships.
+- App-owned SQLite schema for contacts, conversations, messages, import state, windows, and analysis runs.
+- Next/tRPC sync mutations that import local iMessage rows and refresh local contact resolution into the app-owned SQLite database.
+- Focused tests for ordinal assignment, contact resolution, sync controllers, windows, and run summaries.
 
 ## Not Included
 
 - Emotion scoring.
 - A full sync daemon or queue runtime.
-- Electron UI for browsing imported messages or analysis results.
 - Raw local databases or private message fixtures.
