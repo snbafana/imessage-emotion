@@ -2,6 +2,7 @@ import type {
   AnalysisWindow as ApiAnalysisWindow,
   ConversationSummary as ApiConversationSummary,
   RunSummary as ApiRunSummary,
+  SyncStatus as ApiSyncStatus,
   WindowMessage as ApiWindowMessage,
   WindowMessageSlice,
 } from '../lib/api/types'
@@ -15,7 +16,9 @@ export type DashboardApi = {
   createBaselineRun(conversationId: number): Promise<unknown>
   getRunWindows(runId: number): Promise<unknown>
   getWindowMessages(windowId: number, slice: WindowMessageSlice): Promise<unknown>
-  syncMessagesNow(): Promise<unknown>
+  getSyncStatus(): Promise<ApiSyncStatus>
+  syncMessagesNow(): Promise<ApiSyncStatus>
+  syncContactsNow(): Promise<ApiSyncStatus>
 }
 
 export type EmotionKey =

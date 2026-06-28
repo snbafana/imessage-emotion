@@ -13,6 +13,8 @@ export function getDashboardApi(): DashboardApi | null {
     createBaselineRun: (id) => trpc.createBaselineRun.mutate({ conversationId: id }),
     getRunWindows: (id) => trpc.getRunWindows.query(id),
     getWindowMessages: (id, slice) => trpc.getWindowMessages.query({ windowId: id, slice }),
+    getSyncStatus: () => trpc.syncStatus.query(),
     syncMessagesNow: () => trpc.syncMessages.mutate(),
+    syncContactsNow: () => trpc.syncContacts.mutate(),
   }
 }

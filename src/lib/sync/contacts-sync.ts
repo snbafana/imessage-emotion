@@ -10,6 +10,7 @@ export interface ContactsSyncStatus {
 
 export interface ContactsSyncController {
   syncNow(): Promise<ContactsSyncStatus>
+  getStatus(): ContactsSyncStatus
   stop(): void
 }
 
@@ -19,15 +20,22 @@ export function startContactsSync(
   db: AppDatabase,
   options: {
     pollIntervalMs?: number
+    startOnCreate?: boolean
     onStatus?: (status: ContactsSyncStatus) => void
   } = {},
 ): ContactsSyncController {
   let stopped = false
   let running: Promise<ContactsSyncStatus> | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+  let lastStatus: ContactsSyncStatus = {
+    state: 'idle',
+    scannedContacts: 0,
+    resolvedHandles: 0,
+  }
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_CONTACTS_POLL_INTERVAL_MS
 
   function emit(status: ContactsSyncStatus): ContactsSyncStatus {
+    lastStatus = status
     options.onStatus?.(status)
     return status
   }
@@ -65,10 +73,15 @@ export function startContactsSync(
     }, pollIntervalMs)
   }
 
-  void syncNow().finally(schedule)
+  if (options.startOnCreate ?? true) {
+    void syncNow().finally(schedule)
+  }
 
   return {
     syncNow,
+    getStatus() {
+      return lastStatus
+    },
     stop() {
       stopped = true
       if (timer) clearTimeout(timer)
