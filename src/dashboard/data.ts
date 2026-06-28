@@ -1,4 +1,5 @@
 import type {
+  AnalysisRunOptions as ApiAnalysisRunOptions,
   AnalysisWindow as ApiAnalysisWindow,
   ContactSearchHit as ApiContactSearchHit,
   ConversationSummary as ApiConversationSummary,
@@ -15,7 +16,7 @@ export type DashboardApi = {
   listConversations(): Promise<unknown>
   getConversation(conversationId: number): Promise<unknown>
   listRuns(conversationId: number): Promise<unknown>
-  createBaselineRun(conversationId: number): Promise<unknown>
+  createAnalysisRun(conversationId: number, options?: ApiAnalysisRunOptions): Promise<unknown>
   getRunWindows(runId: number): Promise<unknown>
   getWindowMessages(windowId: number, slice: WindowMessageSlice): Promise<unknown>
   getSyncStatus(): Promise<ApiSyncStatus>
@@ -189,6 +190,8 @@ export type WindowView = {
   dominant: ScoreKey | null
   intensity: number
   summary: string
+  rationale: string | null
+  scoreRationales: Partial<Record<ScoreKey, string>>
   error: string | null
 }
 
@@ -269,7 +272,7 @@ export function normalizeRuns(input: unknown): RunView[] {
       id: String(rawId),
       rawId,
       conversationId: getOptionalId(row, ['conversationId', 'conversation_id']),
-      methodKey: getString(row, ['methodKey', 'method_key']) ?? 'baseline-v1',
+      methodKey: getString(row, ['methodKey', 'method_key']) ?? 'ax-llm-v1',
       status,
       state: normalizeRunState(status),
       scale,
@@ -338,6 +341,8 @@ export function normalizeWindows(input: unknown): WindowView[] {
       dominant,
       intensity,
       summary: getString(result, ['summary']) ?? getString(shift, ['summary']) ?? 'No result summary yet.',
+      rationale: getString(result, ['rationale']),
+      scoreRationales: extractScoreRationales(result),
       error: getString(row, ['error']) ?? null,
     }
   })
@@ -388,11 +393,11 @@ export function timelineBlocks(windows: WindowView[]): TimelineBlock[] {
 }
 
 export function runStateLabel(run: RunView | null, windows: WindowView[]): string {
-  if (!run) return 'No baseline run yet'
+  if (!run) return 'No analysis run yet'
   if (run.state === 'failed') return 'Run failed'
   if (run.state === 'pending') return 'Run pending'
   if (windows.some((window) => window.state === 'scored') || run.state === 'scored') {
-    return 'Baseline scored'
+    return 'Ax scored'
   }
   return 'Run status unknown'
 }
@@ -501,6 +506,15 @@ function getDominantScore(result: JsonRecord, scores: Scores): ScoreKey | null {
     if (best == null || (scores[key] ?? 0) > (scores[best] ?? 0)) return key
     return best
   }, null)
+}
+
+function extractScoreRationales(result: JsonRecord): Partial<Record<ScoreKey, string>> {
+  const source = asRecord(result.scoreRationales)
+  return SCORE_KEYS.reduce<Partial<Record<ScoreKey, string>>>((rationales, key) => {
+    const value = getString(source, [key])
+    if (value) rationales[key] = value
+    return rationales
+  }, {})
 }
 
 function isScoreKey(value: string | null): value is ScoreKey {

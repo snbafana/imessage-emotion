@@ -4,7 +4,7 @@ export const API_CHANNELS = {
   syncContactsNow: 'imessage-emotion:sync-contacts-now',
   listConversations: 'imessage-emotion:list-conversations',
   getConversation: 'imessage-emotion:get-conversation',
-  createBaselineRun: 'imessage-emotion:create-baseline-run',
+  createAnalysisRun: 'imessage-emotion:create-analysis-run',
   listRuns: 'imessage-emotion:list-runs',
   getRunWindows: 'imessage-emotion:get-run-windows',
   getWindowMessages: 'imessage-emotion:get-window-messages',
@@ -221,9 +221,7 @@ export interface WindowMessage {
   slice: WindowMessageSlice
 }
 
-export interface BaselineRunOptions {
-  methodKey?: string
-  windowSize?: number
+export interface AnalysisRunOptions {
   contextMessages?: number
   focalMessages?: number
   stride?: number
@@ -265,7 +263,7 @@ export interface ImessageEmotionApi {
   syncContactsNow(): Promise<SyncStatus>
   listConversations(): Promise<ConversationSummary[]>
   getConversation(conversationId: number): Promise<ConversationDetail | null>
-  createBaselineRun(conversationId: number, options?: BaselineRunOptions): Promise<RunSummary>
+  createAnalysisRun(conversationId: number, options?: AnalysisRunOptions): Promise<RunSummary>
   listRuns(conversationId: number): Promise<RunSummary[]>
   getRunWindows(runId: number): Promise<AnalysisWindow[]>
   getWindowMessages(windowId: number, slice?: WindowMessageSlice): Promise<WindowMessage[]>

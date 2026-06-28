@@ -10,7 +10,8 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "runs:top-ax": "tsx scripts/run-top-conversations-ax.ts"
   },
   "dependencies": {
     "@ax-llm/ax": "^22.0.7",

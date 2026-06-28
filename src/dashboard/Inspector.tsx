@@ -73,7 +73,7 @@ export default function Inspector({
                 <BulbIcon />
                 <span className="label">Result JSON summary</span>
               </div>
-              <p>{window.summary}</p>
+              <p>{window.rationale ?? window.summary}</p>
               {window.error && <p className="error-text">{window.error}</p>}
               <div className="drivers">
                 {SCORE_KEYS.map((key) => {
@@ -91,6 +91,9 @@ export default function Inspector({
                         </Progress.Track>
                       </Progress.Root>
                       <span className="pct">{value.toFixed(2)}</span>
+                      {window.scoreRationales[key] && (
+                        <span className="driver-reason">{window.scoreRationales[key]}</span>
+                      )}
                     </div>
                   )
                 })}

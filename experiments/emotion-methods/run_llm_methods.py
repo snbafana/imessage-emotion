@@ -47,7 +47,7 @@ def parse_args():
     parser.add_argument("--pivotal-candidates-per-conversation", type=int, default=2)
     parser.add_argument("--pivotal-max-depth", type=int, default=3)
     parser.add_argument("--latency-benchmark", action="store_true")
-    parser.add_argument("--latency-models", default="gpt-5-nano,gpt-4.1-nano,gpt-4o-mini,gpt-5-mini")
+    parser.add_argument("--latency-models", default="gpt-5-nano,gpt-4.1-nano,gpt-4.1-mini,gpt-5-mini")
     parser.add_argument("--latency-concurrency", default="1,4,8")
     parser.add_argument("--latency-private-conversations", type=int, default=2)
     parser.add_argument("--latency-windows-per-conversation", type=int, default=4)
