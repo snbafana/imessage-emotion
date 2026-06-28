@@ -86,6 +86,7 @@ function formatWindowDate(window: WindowView | undefined): string {
 }
 
 export default function EmotionTimeline({
+  title,
   run,
   runs,
   windows,
@@ -99,6 +100,7 @@ export default function EmotionTimeline({
   statusLine,
   statusTone = 'neutral',
 }: {
+  title: string
   run: RunView | null
   runs: RunView[]
   windows: WindowView[]
@@ -122,6 +124,11 @@ export default function EmotionTimeline({
   return (
     <section className="timeline-panel">
       <div className="panel-head">
+        <div className="heading">
+          <div className="title-row">
+            <h1>{title}</h1>
+          </div>
+        </div>
         <div className="timeline-tools">
           {runs.length > 0 && (
             <label className="run-select-wrap">

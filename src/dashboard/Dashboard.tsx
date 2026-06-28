@@ -49,19 +49,14 @@ export default function Dashboard() {
   // whose participants matched the contacts FTS query.
   const [matchedConversationIds, setMatchedConversationIds] = useState<Set<string> | null>(null)
 
-  const orderedConversations = useMemo(
-    () => moveConversationToTop(conversations, activeId),
-    [conversations, activeId],
-  )
-
   const visibleConversations = useMemo(
     () =>
       matchedConversationIds === null
-        ? orderedConversations
-        : orderedConversations.filter((conversation) =>
+        ? conversations
+        : conversations.filter((conversation) =>
             matchedConversationIds.has(String(conversation.rawId)),
           ),
-    [orderedConversations, matchedConversationIds],
+    [conversations, matchedConversationIds],
   )
 
   const chat = useEveAgent()
@@ -329,6 +324,7 @@ export default function Dashboard() {
       <div className="main">
         <div className="body">
           <EmotionTimeline
+            title={selectedConversation?.title ?? 'No conversation selected'}
             run={run}
             runs={runs}
             windows={windows}
@@ -385,19 +381,6 @@ export default function Dashboard() {
       </div>
     </div>
   )
-}
-
-function moveConversationToTop(
-  conversations: ConversationView[],
-  activeId: string | null,
-): ConversationView[] {
-  if (!activeId) return conversations
-  const activeIndex = conversations.findIndex((conversation) => conversation.id === activeId)
-  if (activeIndex <= 0) return conversations
-  const next = [...conversations]
-  const [active] = next.splice(activeIndex, 1)
-  next.unshift(active)
-  return next
 }
 
 function formatSyncStatus(status: SyncStatus | null): string | null {

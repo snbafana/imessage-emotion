@@ -259,9 +259,33 @@
 .panel-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  justify-content: flex-end;
+  gap: 20px;
+  justify-content: space-between;
   flex-wrap: wrap;
+}
+.panel-head .heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.panel-head .title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.panel-head h1 {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 .timeline-tools {
   display: flex;
@@ -269,7 +293,7 @@
   justify-content: flex-end;
   gap: 10px;
   min-width: 0;
-  width: 100%;
+  flex: 1 1 620px;
   flex-wrap: wrap;
 }
 .timeline-actions {
