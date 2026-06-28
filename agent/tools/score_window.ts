@@ -97,15 +97,35 @@ export default defineTool({
     })
 
     const scores = Object.fromEntries(ANCHORS.map((a) => [a, clamp(out[a])])) as Scores
+    const dom = dominant(scores)
+    const confidence = clamp(out.confidence)
+    const stateLabel = typeof out.stateLabel === 'string' ? out.stateLabel.slice(0, 80) : null
+
+    // Persist so the recompute takes effect on the timeline.
+    const resultJson = JSON.stringify({
+      scores,
+      dominant: dom,
+      confidence,
+      summary: stateLabel ?? `${dom} leading`,
+      method: `ax-${tier.model}`,
+    })
+    db.prepare('UPDATE windows SET result_json = ?, status = ?, latency_ms = ? WHERE id = ?').run(
+      resultJson,
+      'completed',
+      0,
+      windowId,
+    )
+
     return {
       windowId,
       ordinal: target.ordinal,
       effort,
       model: tier.model,
       scores,
-      dominant: dominant(scores),
-      confidence: clamp(out.confidence),
-      stateLabel: typeof out.stateLabel === 'string' ? out.stateLabel.slice(0, 80) : null,
+      dominant: dom,
+      confidence,
+      stateLabel,
+      persisted: true,
       citations: [{ type: 'window' as const, id: windowId, label: `W${target.ordinal}` }],
     }
   },

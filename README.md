@@ -41,14 +41,9 @@ pnpm dev            # http://localhost:3000
 
 The app stores its DB at
 `~/Library/Application Support/imessage-emotion/imessage-emotion.sqlite`
-(override with `IMESSAGE_EMOTION_DB_PATH`).
-
-### Try it with fake data (no Full Disk Access needed)
-
-```bash
-pnpm seed           # populates the DB with synthetic conversations + a scored run
-pnpm dev
-```
+(override with `IMESSAGE_EMOTION_DB_PATH`). Sync your messages, then recompute a
+conversation (the **Recompute (ax)** button) to analyze it — the sidebar shows
+only conversations that have been analyzed.
 
 ## Commands
 
@@ -56,7 +51,6 @@ pnpm dev
 |---|---|
 | `pnpm dev` | Run the app locally |
 | `pnpm build` / `pnpm start` | Production build / serve |
-| `pnpm seed` | Seed the DB with synthetic data |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm lint` | ESLint |
 | `pnpm test` | Vitest (data-foundation unit tests) |

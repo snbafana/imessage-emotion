@@ -1,10 +1,11 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { useEveAgent } from 'eve/react'
+import type { EveMessageData, UseEveAgentHelpers } from 'eve/react'
 import { SendIcon, SparkleIcon } from './icons'
 
 type ChatPanelProps = {
+  agent: UseEveAgentHelpers<EveMessageData>
   conversationId?: number
   runId?: number
   windowId?: number | null
@@ -19,8 +20,7 @@ function toolStateMark(state: string): { mark: string; color: string } {
   return { mark: '⋯', color: '#9A9AA0' } // input-streaming / input-available / approval-*
 }
 
-export default function ChatPanel({ conversationId, runId, windowId = null, label = 'this run' }: ChatPanelProps) {
-  const agent = useEveAgent()
+export default function ChatPanel({ agent, conversationId, runId, windowId = null, label = 'this run' }: ChatPanelProps) {
   const [draft, setDraft] = useState('')
   const [scope, setScope] = useState<Scope>(windowId != null ? 'window' : 'whole')
 
