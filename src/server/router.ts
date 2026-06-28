@@ -8,7 +8,7 @@ import { searchContacts } from '@/lib/contacts/search'
 import { getRunWindows, listRuns } from '@/lib/api/runs'
 import { getWindowMessages } from '@/lib/api/messages'
 import { getLabelingWindow, listLabelingWindows, saveWindowLabel } from '@/lib/api/labels'
-import { createAxAnalysisRun } from '@/lib/emotion/run-analysis'
+import { createAxRun, finishAxRun } from '@/lib/emotion/run-analysis'
 import { EKMAN_ANCHORS } from '@/lib/emotion/anchors'
 import { answerConversation } from '@/lib/chat/answer'
 import { getServerSyncEngine } from '@/lib/sync/server-sync'
@@ -111,9 +111,17 @@ export const appRouter = router({
 
   createAnalysisRun: publicProcedure
     .input(z.object({ conversationId: z.number(), options: analysisOptions.optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(({ input }) => {
       const db = getDb()
-      const { runId } = await createAxAnalysisRun(db, input.conversationId, input.options ?? {})
+      // Create the run and its (unscored) windows synchronously so the client gets
+      // a runId and rows to poll immediately, then score in the background. The
+      // client polls listRuns/getRunWindows to fill the timeline window-by-window.
+      const { runId } = createAxRun(db, input.conversationId, input.options ?? {})
+      // Scorer/window config is already persisted on the run row; finishAxRun
+      // reads it back, so it needs no options here.
+      void finishAxRun(db, runId).catch((error) => {
+        console.error(`Ax analysis run ${runId} failed:`, error)
+      })
       const run = listRuns(db, input.conversationId).find((item) => item.id === runId)
       if (!run) throw new Error(`Analysis run ${runId} was created but could not be read back`)
       return run
