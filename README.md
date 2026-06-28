@@ -1,30 +1,26 @@
-# React + TypeScript + Vite
+# iMessage Emotion
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Electron app foundation for analyzing emotion changes over time in local iMessage conversations.
 
-Currently, two official plugins are available:
+## Data Foundation
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The app keeps its own SQLite database under Electron `userData` instead of repeatedly querying Apple's `chat.db` throughout the UI and analysis layers. The local tables dedupe contacts, conversations, and messages so analysis can use deterministic conversation history positions.
 
-## Expanding the ESLint configuration
+Every imported message has a `conversation_ordinal` scoped to its conversation. Ordinals are assigned by normalized chronological order using `sent_at`, source rowid, and guid as deterministic tie-breakers. Windows use ordinal boundaries first, plus start/end message IDs for evidence joins.
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+Windows are reusable context slices. A scoring run points at existing windows through `run_windows`, so the same window can be scored by many methods without changing the underlying context.
 
-- Configure the top-level `parserOptions` property like this:
+## Included
 
-```js
-export default {
-  // other rules...
-  parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-  },
-}
-```
+- Local iMessage reader for `chat.db` access, Apple timestamp conversion, attributed-body text fallback, and handle normalization.
+- Local Contacts resolver for display names, company/card IDs, and avatar URLs when available from macOS Contacts.
+- App-owned SQLite schema for contacts, conversations, messages, import state, windows, scorer configs, runs, results, and shifts.
+- Main-process sync loops that import new local iMessage rows and refresh local contact resolution while the Electron app is open.
+- Focused tests for ordinal assignment, overlapping windows, tail handling, and run-to-window relationships.
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+## Not Included
+
+- Emotion scoring.
+- A full sync daemon or queue runtime.
+- Electron UI for browsing imported messages or analysis results.
+- Raw local databases or private message fixtures.
