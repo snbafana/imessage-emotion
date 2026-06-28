@@ -28,7 +28,7 @@ importers:
         version: 0.36.4(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/react@18.3.31)(better-sqlite3@12.11.1)(react@18.3.1)
       eve:
         specifier: ^0.16.2
-        version: 0.16.2(@opentelemetry/api@1.9.1)(ai@7.0.4(zod@4.4.3))(better-sqlite3@12.11.1)(drizzle-orm@0.36.4(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/react@18.3.31)(better-sqlite3@12.11.1)(react@18.3.1))(next@14.2.35(@opentelemetry/api@1.9.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(vite@8.1.0(@types/node@22.20.0)(esbuild@0.19.12)(tsx@4.22.4))
+        version: 0.16.2(@opentelemetry/api@1.9.1)(ai@7.0.4(zod@4.4.3))(better-sqlite3@12.11.1)(drizzle-orm@0.36.4(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/react@18.3.31)(better-sqlite3@12.11.1)(react@18.3.1))(microsandbox@0.6.0)(next@14.2.35(@opentelemetry/api@1.9.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(vite@8.1.0(@types/node@22.20.0)(esbuild@0.19.12)(tsx@4.22.4))
       next:
         specifier: ^14.2.15
         version: 14.2.35(@opentelemetry/api@1.9.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -72,6 +72,9 @@ importers:
       eslint-plugin-react-hooks:
         specifier: ^4.6.0
         version: 4.6.2(eslint@8.57.1)
+      microsandbox:
+        specifier: ^0.6.0
+        version: 0.6.0
       tsx:
         specifier: ^4.22.4
         version: 4.22.4
@@ -851,6 +854,38 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@superradcompany/microsandbox-darwin-arm64@0.6.0':
+    resolution: {integrity: sha512-FVpKPUp9GLMXTZBDAkpAEbN7NXYeQnTm5jDPM3Oj6Ume3ulD+YQT0ePyzWwzmG1N8pu0g/EEnD/INT1QKg4B/g==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.0':
+    resolution: {integrity: sha512-KSBoHV4OxMqbefrJqXgkTmzVX57/heKiGew1xt+isygPpRkHToGHfM2sMkBJItjnbo7mfqkEcane/EblmOpZaA==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@superradcompany/microsandbox-linux-x64-gnu@0.6.0':
+    resolution: {integrity: sha512-X+rkkKvCNqiuj9nQ5JJQR910cW8DYFO7oRE7+FvLGQh9jLMmZRFUJcGXjFPeW+yiDcNmHB6rXO390L038yUgvw==}
+    engines: {node: '>= 22'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.0':
+    resolution: {integrity: sha512-I3ttT5iwCqDHfC7SMhhEoKWNg+zMrsn7UCmJnQbqDwiTHNpJC+aNXdcxTBJpkni56lJyoi6Pl/25Ug6S7hU7tg==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@superradcompany/microsandbox-win32-x64-msvc@0.6.0':
+    resolution: {integrity: sha512-mK93wG/k+DkRInaA96snXugT7Yh4/FQIHdJelEXyVxglMcWGt5vrAU5Fi02v9UUIk7SloA+XXiGM3RT6FhnQQA==}
+    engines: {node: '>= 22'}
+    cpu: [x64]
+    os: [win32]
 
   '@swc/counter@0.1.3':
     resolution: {integrity: sha512-e2BR4lsJkkRlKZ/qCHPw9ZaSxc0MVUd7gtbtaB7aMvHeJVYe8sOB8DBZkP2DtISHGSku9sCK6T6cnY0CtXrOCQ==}
@@ -2255,6 +2290,11 @@ packages:
     resolution: {integrity: sha512-PXwfBhYu0hBCPw8Dn0E+WDYb7af3dSLVWKi3HGv84IdF4TyFoC0ysxFd0Goxw7nSv4T/PzEJQxsYsEiFCKo2BA==}
     engines: {node: '>=8.6'}
 
+  microsandbox@0.6.0:
+    resolution: {integrity: sha512-isMAm10BRPd3EYMFW7TfqMGjOIhG+uCMzAPKXy5tnrq7TggX7zSkhcy9LYffnypmcr9edDbr5/XYrHpzZ9o1RQ==}
+    engines: {node: '>= 22'}
+    hasBin: true
+
   mimic-response@3.1.0:
     resolution: {integrity: sha512-z0yWI+4FDrrweS8Zmt4Ej5HdJmky15+L2e6Wgn3+iK5fWzb6T3fhNFq2+MeTRb064c6Wr4N/wv0DzQTjNzHNGQ==}
     engines: {node: '>=10'}
@@ -3551,6 +3591,21 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
+  '@superradcompany/microsandbox-darwin-arm64@0.6.0':
+    optional: true
+
+  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.0':
+    optional: true
+
+  '@superradcompany/microsandbox-linux-x64-gnu@0.6.0':
+    optional: true
+
+  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.0':
+    optional: true
+
+  '@superradcompany/microsandbox-win32-x64-msvc@0.6.0':
+    optional: true
+
   '@swc/counter@0.1.3': {}
 
   '@swc/helpers@0.5.5':
@@ -4333,7 +4388,7 @@ snapshots:
       '@typescript-eslint/parser': 7.18.0(eslint@8.57.1)(typescript@5.9.3)
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1)
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1)
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
       eslint-plugin-jsx-a11y: 6.10.2(eslint@8.57.1)
       eslint-plugin-react: 7.37.5(eslint@8.57.1)
@@ -4353,7 +4408,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -4368,14 +4423,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.13.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1):
+  eslint-module-utils@2.13.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 7.18.0(eslint@8.57.1)(typescript@5.9.3)
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@8.57.1)
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1)
     transitivePeerDependencies:
       - supports-color
 
@@ -4390,7 +4445,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 8.57.1
       eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.13.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@8.57.1)
+      eslint-module-utils: 2.13.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@7.18.0(eslint@8.57.1)(typescript@5.9.3))(eslint@8.57.1))(eslint@8.57.1))(eslint@8.57.1)
       hasown: 2.0.4
       is-core-module: 2.16.2
       is-glob: 4.0.3
@@ -4525,12 +4580,13 @@ snapshots:
 
   esutils@2.0.3: {}
 
-  eve@0.16.2(@opentelemetry/api@1.9.1)(ai@7.0.4(zod@4.4.3))(better-sqlite3@12.11.1)(drizzle-orm@0.36.4(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/react@18.3.31)(better-sqlite3@12.11.1)(react@18.3.1))(next@14.2.35(@opentelemetry/api@1.9.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(vite@8.1.0(@types/node@22.20.0)(esbuild@0.19.12)(tsx@4.22.4)):
+  eve@0.16.2(@opentelemetry/api@1.9.1)(ai@7.0.4(zod@4.4.3))(better-sqlite3@12.11.1)(drizzle-orm@0.36.4(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/react@18.3.31)(better-sqlite3@12.11.1)(react@18.3.1))(microsandbox@0.6.0)(next@14.2.35(@opentelemetry/api@1.9.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(react@18.3.1)(vite@8.1.0(@types/node@22.20.0)(esbuild@0.19.12)(tsx@4.22.4)):
     dependencies:
       ai: 7.0.4(zod@4.4.3)
       nitro: 3.0.260610-beta(better-sqlite3@12.11.1)(drizzle-orm@0.36.4(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/react@18.3.31)(better-sqlite3@12.11.1)(react@18.3.1))(vite@8.1.0(@types/node@22.20.0)(esbuild@0.19.12)(tsx@4.22.4))
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
+      microsandbox: 0.6.0
       next: 14.2.35(@opentelemetry/api@1.9.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react: 18.3.1
       vite: 8.1.0(@types/node@22.20.0)(esbuild@0.19.12)(tsx@4.22.4)
@@ -5050,6 +5106,14 @@ snapshots:
     dependencies:
       braces: 3.0.3
       picomatch: 2.3.2
+
+  microsandbox@0.6.0:
+    optionalDependencies:
+      '@superradcompany/microsandbox-darwin-arm64': 0.6.0
+      '@superradcompany/microsandbox-linux-arm64-gnu': 0.6.0
+      '@superradcompany/microsandbox-linux-x64-gnu': 0.6.0
+      '@superradcompany/microsandbox-win32-arm64-msvc': 0.6.0
+      '@superradcompany/microsandbox-win32-x64-msvc': 0.6.0
 
   mimic-response@3.1.0: {}
 
