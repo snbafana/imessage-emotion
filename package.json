@@ -13,7 +13,9 @@
     "db:generate": "drizzle-kit generate",
     "smoke:onboarding-status": "node --loader ./scripts/ts-strip-loader.mjs scripts/smoke-onboarding-status.mjs",
     "smoke:local-app-db": "node --loader ./scripts/ts-strip-loader.mjs scripts/smoke-local-app-db.mjs",
-    "smoke:privacy": "node scripts/smoke-privacy-guard.mjs"
+    "smoke:ax-native-db": "node scripts/smoke-ax-native-db.mjs",
+    "smoke:privacy": "node scripts/smoke-privacy-guard.mjs",
+    "runs:top-ax": "tsx scripts/run-top-conversations-ax.ts"
   },
   "dependencies": {
     "@ax-llm/ax": "^22.0.7",

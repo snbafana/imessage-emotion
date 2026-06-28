@@ -93,8 +93,6 @@ export function migrate(db: AppDatabase): void {
     );
   `)
 
-  resetLegacyAnalysisTables(db)
-
   db.exec(`
     PRAGMA foreign_keys = ON;
 
@@ -146,6 +144,27 @@ export function migrate(db: AppDatabase): void {
     );
     CREATE INDEX IF NOT EXISTS analysis_runs_conversation_idx
       ON analysis_runs(conversation_id, started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS window_labels (
+      id INTEGER PRIMARY KEY,
+      window_id INTEGER NOT NULL REFERENCES windows(id) ON DELETE CASCADE,
+      labeler TEXT NOT NULL DEFAULT 'human',
+      dominant TEXT,
+      acceptable_dominants_json TEXT NOT NULL DEFAULT '[]',
+      scores_json TEXT NOT NULL DEFAULT '{}',
+      requires_context INTEGER,
+      sarcasm_or_subtext INTEGER,
+      ambiguity TEXT,
+      state_label TEXT,
+      evidence_message_refs_json TEXT NOT NULL DEFAULT '[]',
+      pivotal_message_refs_json TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+      UNIQUE (window_id, labeler)
+    );
+    CREATE INDEX IF NOT EXISTS window_labels_window_idx
+      ON window_labels(window_id);
   `)
 
   ensureContactsFts(db)
@@ -195,32 +214,11 @@ function ensureContactsFts(db: AppDatabase): void {
   }
 }
 
-function resetLegacyAnalysisTables(db: AppDatabase): void {
-  if (!tableExists(db, 'windows') || tableHasColumn(db, 'windows', 'run_id')) return
-
-  db.exec(`
-    PRAGMA foreign_keys = OFF;
-    DROP TABLE IF EXISTS shifts;
-    DROP TABLE IF EXISTS window_results;
-    DROP TABLE IF EXISTS run_windows;
-    DROP TABLE IF EXISTS analysis_runs;
-    DROP TABLE IF EXISTS windows;
-    DROP TABLE IF EXISTS scorer_configs;
-    DROP TABLE IF EXISTS window_configs;
-    PRAGMA foreign_keys = ON;
-  `)
-}
-
 function tableExists(db: AppDatabase, tableName: string): boolean {
   const row = db
     .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = ?")
     .get(tableName) as { found: number } | undefined
   return row !== undefined
-}
-
-function tableHasColumn(db: AppDatabase, tableName: string, columnName: string): boolean {
-  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
-  return columns.some((column) => column.name === columnName)
 }
 
 function numberValue(value: unknown): number {

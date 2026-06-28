@@ -5,18 +5,15 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { ai, ax } from "@ax-llm/ax";
 import { pipeline } from "@huggingface/transformers";
+import { getWindowMessages } from "../../src/lib/api/messages.ts";
+import { getRunWindows, listRuns } from "../../src/lib/api/runs.ts";
+import type { WindowMessage } from "../../src/lib/api/types.ts";
+import { openAppDatabase, getPrivacySafeCounts, type AppDatabase } from "../../src/lib/db/schema.ts";
+import { resolveDbPath } from "../../src/lib/db/connection.ts";
+import { EKMAN_ANCHORS, type Anchor } from "../../src/lib/emotion/anchors.ts";
+import { planRunWindowRanges } from "../../src/lib/windows/windows.ts";
 
-const ANCHORS = [
-  "anger",
-  "disgust",
-  "fear",
-  "joy",
-  "neutral",
-  "sadness",
-  "surprise",
-] as const;
-
-type Anchor = (typeof ANCHORS)[number];
+const ANCHORS = EKMAN_ANCHORS;
 type Scores = Record<Anchor, number>;
 
 type Message = {
@@ -24,15 +21,20 @@ type Message = {
   content: string;
   isFromMe: boolean;
   sentAt?: string;
+  messageId?: number;
+  ordinal?: number;
 };
 
 type Conversation = {
   id: string;
-  kind: "synthetic" | "private";
+  kind: "synthetic" | "private" | "native";
   expected?: Anchor[];
   sourceConversationId?: string;
   fullMessageCount?: number;
   messages: Message[];
+  nativeWindows?: Window[];
+  nativeRunId?: number;
+  nativeWindowConfig?: Record<string, unknown>;
 };
 
 type Window = {
@@ -40,6 +42,9 @@ type Window = {
   start: number;
   end: number;
   messages: Message[];
+  sourceWindowId?: number;
+  sourceRunId?: number;
+  ordinal?: number;
 };
 
 type SelectionConfig = {
@@ -63,17 +68,25 @@ type LlmConfig = {
   concurrency?: number;
   maxWindows?: number;
   maxTokens?: number;
+  inputUsdPerMillionTokens?: number;
+  outputUsdPerMillionTokens?: number;
   enabled?: boolean;
 };
 
 type Config = {
   runName?: string;
   dataset?: {
-    kind?: "synthetic" | "private" | "mixed";
+    kind?: "synthetic" | "private" | "mixed" | "native" | "app";
+    appDbPath?: string;
     privateConversationLimit?: number;
+    nativeConversationLimit?: number;
+    nativeConversationOrder?: "recent" | "longest";
+    minMessagesPerConversation?: number;
     maxMessagesPerConversation?: number;
     privateConversationOrder?: "recent" | "longest";
     includeWindowTextInOutput?: boolean;
+    preferExistingWindows?: boolean;
+    nativeRunId?: number;
   };
   windowing?: Array<{ size: number; stride: number }>;
   selection?: SelectionConfig;
@@ -94,12 +107,33 @@ type LlmRow =
   | {
       ok: true;
       windowRef: string;
+      sourceWindowId?: number;
+      sourceRunId?: number;
       latencyMs: number;
       stateLabel: string | null;
       confidence: number;
       dominant: Anchor;
       scores: Scores;
+      evidence: SelectedWindow["messageRefs"];
       evidenceRefCount: number;
+      reasoningSummary: string | null;
+      uncertainty: ParsedLlmScore["uncertainty"];
+      priorComparison: ParsedLlmScore["priorComparison"];
+      inputTokens: number;
+      outputTokens: number;
+      estimatedCostUsd: number | null;
+      completionMs: number;
+    }
+  | {
+      ok: true;
+      dryRun: true;
+      windowRef: string;
+      sourceWindowId?: number;
+      sourceRunId?: number;
+      messageCount: number;
+      inputChars: number;
+      inputTokens: number;
+      estimatedCostUsd: null;
       completionMs: number;
     }
   | {
@@ -116,6 +150,24 @@ type SelectedWindow = {
   contextMode: "window_only" | "prior_summary" | "prior_messages" | "full_conversation";
   text: string;
   baseline: Scores;
+  sourceWindowId?: number;
+  sourceRunId?: number;
+  messageRefs: Array<{ ref: string; messageId?: number; ordinal?: number }>;
+  inputChars: number;
+};
+
+type LoadedDataset = {
+  conversations: Conversation[];
+  source: {
+    kind: "synthetic" | "private" | "mixed" | "native";
+    nativeDb?: {
+      pathSource: "default" | "override";
+      counts: ReturnType<typeof getPrivacySafeCounts>;
+      selectedConversationCount: number;
+      existingRunCount: number;
+      existingWindowCount: number;
+    };
+  };
 };
 
 const OUT_DIR = new URL("./out/", import.meta.url);
@@ -274,6 +326,8 @@ function parseArgs() {
   return {
     config: valueAfter("--config", "harness.ax.json"),
     out: valueAfter("--out", "out/harness-ax-results.json"),
+    noProvider: args.includes("--no-provider") || args.includes("--dry-run"),
+    allowPrivateOutput: args.includes("--allow-private-output"),
   };
 }
 
@@ -362,6 +416,154 @@ function privateConversations(limit: number, maxMessages: number, order: "recent
   });
 }
 
+type NativeConversationRow = {
+  id: number;
+  message_count: number;
+  last_message_at: number | null;
+};
+
+function nativeMessage(message: WindowMessage): Message {
+  return {
+    id: `message:${message.id}`,
+    messageId: message.id,
+    ordinal: message.conversationOrdinal,
+    isFromMe: message.isFromMe,
+    sentAt: String(message.sentAt),
+    content: String(message.text ?? "").slice(0, 500),
+  };
+}
+
+function selectNativeMessages(
+  db: AppDatabase,
+  conversationId: number,
+  maxMessages: number,
+): Message[] {
+  const limitSql = Number(maxMessages) > 0 ? "LIMIT ?" : "";
+  const params = Number(maxMessages) > 0 ? [conversationId, maxMessages] : [conversationId];
+  const rows = db
+    .prepare(
+      `
+      SELECT id, conversation_ordinal, text, sent_at, is_from_me
+      FROM messages
+      WHERE conversation_id = ?
+        AND text IS NOT NULL
+        AND length(trim(text)) > 0
+      ORDER BY conversation_ordinal
+      ${limitSql}
+    `,
+    )
+    .all(...params) as Array<{
+    id: number;
+    conversation_ordinal: number;
+    text: string;
+    sent_at: number;
+    is_from_me: number;
+  }>;
+
+  return rows.map((row) => ({
+    id: `message:${row.id}`,
+    messageId: row.id,
+    ordinal: row.conversation_ordinal,
+    isFromMe: row.is_from_me === 1,
+    sentAt: String(row.sent_at),
+    content: row.text.slice(0, 500),
+  }));
+}
+
+function selectNativeConversations(
+  db: AppDatabase,
+  limit: number,
+  minMessages: number,
+  order: "recent" | "longest",
+): NativeConversationRow[] {
+  const orderBy = order === "longest" ? "message_count DESC, last_message_at DESC" : "last_message_at DESC";
+  return db
+    .prepare(
+      `
+      SELECT id, message_count, last_message_at
+      FROM conversations
+      WHERE message_count >= ?
+      ORDER BY ${orderBy}, id DESC
+      LIMIT ?
+    `,
+    )
+    .all(minMessages, limit) as NativeConversationRow[];
+}
+
+function latestNativeRun(db: AppDatabase, conversationId: number, requestedRunId?: number) {
+  const runs = listRuns(db, conversationId);
+  if (requestedRunId !== undefined) return runs.find((run) => run.id === requestedRunId) ?? null;
+  return runs.find((run) => run.windowCount > 0) ?? null;
+}
+
+function nativeWindowsForRun(db: AppDatabase, conversationId: number, runId: number): Window[] {
+  const windows = getRunWindows(db, runId).filter((window) => window.conversationId === conversationId);
+  return windows.map((window) => {
+    const messages = getWindowMessages(db, window.id, "focal").map(nativeMessage);
+    return {
+      index: Math.max(0, window.ordinal - 1),
+      start: window.focalStartOrdinal - 1,
+      end: window.focalEndOrdinal - 1,
+      messages,
+      sourceWindowId: window.id,
+      sourceRunId: runId,
+      ordinal: window.ordinal,
+    };
+  }).filter((window) => window.messages.length > 0);
+}
+
+function nativeConversations(config: NonNullable<Config["dataset"]>): LoadedDataset {
+  const dbPath = config.appDbPath ?? resolveDbPath();
+  const db = openAppDatabase(dbPath);
+  try {
+    const counts = getPrivacySafeCounts(db);
+    const limit = config.nativeConversationLimit ?? config.privateConversationLimit ?? 2;
+    const maxMessages = config.maxMessagesPerConversation ?? 600;
+    const minMessages = config.minMessagesPerConversation ?? 24;
+    const order = config.nativeConversationOrder ?? config.privateConversationOrder ?? "recent";
+    const preferExistingWindows = config.preferExistingWindows !== false;
+    const rows = selectNativeConversations(db, limit, minMessages, order);
+    let existingRunCount = 0;
+    let existingWindowCount = 0;
+
+    const conversations = rows.map((row, index): Conversation => {
+      const run = preferExistingWindows ? latestNativeRun(db, row.id, config.nativeRunId) : null;
+      const nativeWindows = run ? nativeWindowsForRun(db, row.id, run.id) : [];
+      if (nativeWindows.length > 0) {
+        existingRunCount += 1;
+        existingWindowCount += nativeWindows.length;
+      }
+
+      return {
+        id: `native_c${String(index + 1).padStart(2, "0")}`,
+        kind: "native",
+        sourceConversationId: String(row.id),
+        fullMessageCount: row.message_count,
+        messages: selectNativeMessages(db, row.id, maxMessages),
+        nativeWindows,
+        nativeRunId: run?.id,
+        nativeWindowConfig: run?.windowConfig,
+      };
+    });
+
+    return {
+      conversations,
+      source: {
+        kind: "native",
+        nativeDb: {
+          pathSource: config.appDbPath ? "override" : "default",
+          counts,
+          selectedConversationCount: conversations.length,
+          existingRunCount,
+          existingWindowCount,
+        },
+      },
+    };
+  } finally {
+    db.close();
+  }
+}
+
 function cuedSql(sql: string): Array<Record<string, unknown>> {
   const raw = execFileSync("cued", ["sql", sql], {
     encoding: "utf8",
@@ -370,9 +572,11 @@ function cuedSql(sql: string): Array<Record<string, unknown>> {
   return JSON.parse(raw.replace(/^\(node:[^\n]+\)\s+ExperimentalWarning:[\s\S]*?\n(?=[[{])/, ""));
 }
 
-function loadDataset(config: Config): Conversation[] {
+function loadDataset(config: Config): LoadedDataset {
   const dataset = config.dataset ?? {};
   const kind = dataset.kind ?? "synthetic";
+  if (kind === "native" || kind === "app") return nativeConversations(dataset);
+
   const rows: Conversation[] = [];
   if (kind === "synthetic" || kind === "mixed") rows.push(...syntheticConversations());
   if (kind === "private" || kind === "mixed") {
@@ -384,7 +588,10 @@ function loadDataset(config: Config): Conversation[] {
       ),
     );
   }
-  return rows;
+  return {
+    conversations: rows,
+    source: { kind },
+  };
 }
 
 function makeWindows(messages: Message[], size: number, stride: number): Window[] {
@@ -398,15 +605,74 @@ function makeWindows(messages: Message[], size: number, stride: number): Window[
   return windows;
 }
 
+function makeNativePlannedWindows(messages: Message[], size: number, stride: number): Window[] {
+  const byOrdinal = new Map(messages.flatMap((message) => (message.ordinal ? [[message.ordinal, message]] : [])));
+  const lastOrdinal = Math.max(0, ...messages.map((message) => message.ordinal ?? 0));
+  const ranges = planRunWindowRanges(lastOrdinal, {
+    mode: "absolute-message-count",
+    contextMessages: 0,
+    focalMessages: size,
+    stride,
+    minFocalMessages: Math.max(2, Math.min(4, size)),
+  });
+  return ranges.map((range) => ({
+    index: range.ordinal - 1,
+    start: range.focalStartOrdinal - 1,
+    end: range.focalEndOrdinal - 1,
+    ordinal: range.ordinal,
+    messages: rangeOrdinals(range.focalStartOrdinal, range.focalEndOrdinal)
+      .map((ordinal) => byOrdinal.get(ordinal))
+      .filter((message): message is Message => Boolean(message)),
+  })).filter((window) => window.messages.length > 0);
+}
+
+function rangeOrdinals(start: number, end: number): number[] {
+  return Array.from({ length: Math.max(0, end - start + 1) }, (_, index) => start + index);
+}
+
+function windowsForConversation(conversation: Conversation, spec: { size: number; stride: number }): Window[] {
+  if (conversation.kind === "native") {
+    if (
+      conversation.nativeWindows &&
+      conversation.nativeWindows.length > 0 &&
+      nativeWindowConfigMatches(conversation.nativeWindowConfig, spec)
+    ) {
+      return conversation.nativeWindows;
+    }
+    return makeNativePlannedWindows(conversation.messages, spec.size, spec.stride);
+  }
+  return makeWindows(conversation.messages, spec.size, spec.stride);
+}
+
+function nativeWindowConfigMatches(
+  config: Record<string, unknown> | undefined,
+  spec: { size: number; stride: number },
+): boolean {
+  if (!config) return false;
+  return Number(config.focalMessages) === spec.size && Number(config.stride) === spec.stride;
+}
+
 function windowRef(conversationId: string, window: Window) {
+  if (window.sourceWindowId) {
+    return `${conversationId}_run${window.sourceRunId ?? "unknown"}_w${window.sourceWindowId}`;
+  }
   return `${conversationId}_w${String(window.index).padStart(3, "0")}`;
+}
+
+function messageRef(message: Message, fallbackIndex: number): string {
+  return `m${String(message.ordinal ?? fallbackIndex).padStart(4, "0")}`;
 }
 
 function messageLines(messages: Message[], start = 0, maxChars = 3000) {
   return messages
     .map((message, index) => {
       const speaker = message.isFromMe ? "me" : "them";
-      return `m${String(start + index).padStart(4, "0")}: ${speaker}: ${message.content}`;
+      const ref = messageRef(message, start + index);
+      const ids = [
+        message.messageId ? `messageId=${message.messageId}` : null,
+        message.ordinal ? `ordinal=${message.ordinal}` : null,
+      ].filter(Boolean).join(" ");
+      return `${ref}${ids ? ` ${ids}` : ""}: ${speaker}: ${message.content}`;
     })
     .join("\n")
     .slice(0, maxChars);
@@ -455,10 +721,15 @@ function scoreEmojiKeywordFeatures(text: string): Scores {
   return normalize(scores);
 }
 
-let robertaEmotionClassifier: ReturnType<typeof pipeline> | null = null;
+type EmotionClassifier = (
+  input: string | string[],
+  options: { top_k: number; truncation: boolean },
+) => Promise<Array<{ label: string; score: number }> | Array<Array<{ label: string; score: number }>>>;
+
+let robertaEmotionClassifier: EmotionClassifier | null = null;
 
 async function robertaEmotion() {
-  robertaEmotionClassifier ??= pipeline("text-classification", ROBERTA_EMOTION_MODEL, { dtype: "q8" });
+  robertaEmotionClassifier ??= await pipeline("text-classification", ROBERTA_EMOTION_MODEL, { dtype: "q8" }) as unknown as EmotionClassifier;
   return robertaEmotionClassifier;
 }
 
@@ -546,7 +817,7 @@ async function runDeterministic(
       const started = performance.now();
       const rows = [];
       for (const conversation of conversations) {
-        const windows = makeWindows(conversation.messages, spec.size, spec.stride);
+        const windows = windowsForConversation(conversation, spec);
         const scored = name === "roberta_emotion"
           ? await scoreRobertaWindows(windows)
           : windows.map((window) => scoreWindow(window, scorer!));
@@ -573,6 +844,8 @@ async function runDeterministic(
                 const window = windows[row.index];
                 return {
                   windowRef: windowRef(conversation.id, window),
+                  sourceWindowId: window.sourceWindowId,
+                  sourceRunId: window.sourceRunId,
                   index: row.index,
                   start: window.start,
                   end: window.end,
@@ -665,6 +938,18 @@ function targetText(
   ].join("\n").slice(0, maxContextChars);
 }
 
+function refsForMessages(messages: Message[], start: number): SelectedWindow["messageRefs"] {
+  return messages.map((message, index) => ({
+    ref: messageRef(message, start + index),
+    messageId: message.messageId,
+    ordinal: message.ordinal,
+  }));
+}
+
+function withInputStats(window: SelectedWindow): SelectedWindow {
+  return { ...window, inputChars: scorePacketInputChars(window) };
+}
+
 function selectWindows(
   conversations: Conversation[],
   spec: { size: number; stride: number },
@@ -680,7 +965,7 @@ function selectWindows(
   const selected: SelectedWindow[] = [];
 
   for (const conversation of conversations) {
-    const windows = makeWindows(conversation.messages, spec.size, spec.stride);
+    const windows = windowsForConversation(conversation, spec);
     const conversationRow = deterministicConversation(deterministic, candidateScorer, spec, conversation.id);
     const keep = selectWindowIndexes(windows, conversationRow, maxPerConversation);
     for (const window of windows) {
@@ -694,10 +979,14 @@ function selectWindows(
         contextMode,
         text: targetText(conversation, window, conversationRow, contextMode, maxContextChars, contextMessages),
         baseline: prior.length ? meanScores(prior) : zeroScores(),
+        sourceWindowId: window.sourceWindowId,
+        sourceRunId: window.sourceRunId,
+        messageRefs: refsForMessages(window.messages, window.start),
+        inputChars: 0,
       });
     }
   }
-  return selected;
+  return selected.map(withInputStats);
 }
 
 function allWindowTargets(
@@ -712,7 +1001,7 @@ function allWindowTargets(
 ) {
   const targets: SelectedWindow[] = [];
   for (const conversation of conversations) {
-    const windows = makeWindows(conversation.messages, spec.size, spec.stride);
+    const windows = windowsForConversation(conversation, spec);
     const conversationRow = deterministicConversation(deterministic, scorer, spec, conversation.id);
     for (const window of windows.slice(0, maxPerConversation ?? windows.length)) {
       const prior = conversationRow?.rows?.filter((row) => row.index < window.index).map((row) => row.scores) ?? [];
@@ -724,10 +1013,14 @@ function allWindowTargets(
         contextMode,
         text: targetText(conversation, window, conversationRow, contextMode, maxContextChars, contextMessages),
         baseline: prior.length ? meanScores(prior) : zeroScores(),
+        sourceWindowId: window.sourceWindowId,
+        sourceRunId: window.sourceRunId,
+        messageRefs: refsForMessages(window.messages, window.start),
+        inputChars: 0,
       });
     }
   }
-  return targets;
+  return targets.map(withInputStats);
 }
 
 function wholeConversationTargets(
@@ -735,7 +1028,7 @@ function wholeConversationTargets(
   maxContextChars: number,
   maxConversations: number,
 ): SelectedWindow[] {
-  return conversations.slice(0, maxConversations).map((conversation) => ({
+  const targets: SelectedWindow[] = conversations.slice(0, maxConversations).map((conversation) => ({
     conversationId: conversation.id,
     kind: conversation.kind,
     windowRef: `${conversation.id}_conversation`,
@@ -743,7 +1036,11 @@ function wholeConversationTargets(
     contextMode: "full_conversation",
     text: messageLines(conversation.messages, 0, maxContextChars),
     baseline: zeroScores(),
+    sourceRunId: conversation.nativeRunId,
+    messageRefs: refsForMessages(conversation.messages, 0),
+    inputChars: 0,
   }));
+  return targets.map(withInputStats);
 }
 
 function targetsForRun(
@@ -782,21 +1079,79 @@ function targetsForRun(
 
 const scoreWindowWithAx = ax(`
   taskContext:string "Instructions and JSON contract",
+  schemaJson:string "Strict JSON schema the resultJson output must satisfy",
   baselineJson:string "Prior conversation-specific baseline scores as JSON",
   windowRef:string "Stable local window reference",
   windowText:string "Bounded private iMessage window with local message refs"
   ->
-  anger:number "anger score from 0 to 1",
-  disgust:number "disgust score from 0 to 1",
-  fear:number "fear score from 0 to 1",
-  joy:number "joy score from 0 to 1",
-  neutral:number "neutral score from 0 to 1",
-  sadness:number "sadness score from 0 to 1",
-  surprise:number "surprise score from 0 to 1",
-  confidence:number "confidence from 0 to 1",
-  stateLabel:string "short non-identifying state label",
-  evidenceMessageRefs:string[] "local message refs only, like m0042"
+  resultJson:string "Strict JSON only, no markdown, no private message quotes"
 `);
+
+const WINDOW_SCORE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "windowRef",
+    "scores",
+    "dominant",
+    "confidence",
+    "stateLabel",
+    "reasoningSummary",
+    "uncertainty",
+    "priorComparison",
+    "evidence",
+  ],
+  properties: {
+    windowRef: { type: "string" },
+    scores: {
+      type: "object",
+      additionalProperties: false,
+      required: ANCHORS,
+      properties: Object.fromEntries(ANCHORS.map((anchor) => [anchor, { type: "number", minimum: 0, maximum: 1 }])),
+    },
+    dominant: { enum: ANCHORS },
+    confidence: { type: "number", minimum: 0, maximum: 1 },
+    stateLabel: { type: "string", maxLength: 80 },
+    reasoningSummary: {
+      type: "string",
+      maxLength: 220,
+      description: "Short dashboard-safe rationale. Do not quote or paraphrase private text.",
+    },
+    uncertainty: {
+      type: "object",
+      additionalProperties: false,
+      required: ["level", "reason"],
+      properties: {
+        level: { enum: ["low", "medium", "high"] },
+        reason: { type: "string", maxLength: 160 },
+      },
+    },
+    priorComparison: {
+      type: "object",
+      additionalProperties: false,
+      required: ["summary", "largestDeltaEmotion", "largestDelta"],
+      properties: {
+        summary: { type: "string", maxLength: 180 },
+        largestDeltaEmotion: { enum: ANCHORS },
+        largestDelta: { type: "number", minimum: -1, maximum: 1 },
+      },
+    },
+    evidence: {
+      type: "array",
+      maxItems: 5,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["ref"],
+        properties: {
+          ref: { type: "string", pattern: "^m[0-9]{4,}$" },
+          messageId: { type: "number" },
+          ordinal: { type: "number" },
+        },
+      },
+    },
+  },
+} as const;
 
 function axService(config: LlmConfig) {
   const apiKey =
@@ -828,37 +1183,163 @@ function taskContext() {
     "Score a private iMessage conversation window for temporal emotion analysis.",
     "Do not quote or paraphrase private message text.",
     `Use these RoBERTa/Ekman-style emotion dimensions only: ${ANCHORS.join(", ")}.`,
-    "Use evidenceMessageRefs as local refs like m0042 only.",
-    "Compare the current window against the baselineJson when choosing stateLabel and confidence.",
+    "Use evidence refs by local message ref, message id, or ordinal only.",
+    "Compare the current window against baselineJson when choosing stateLabel, confidence, uncertainty, and priorComparison.",
+    "Return only resultJson that conforms to schemaJson. Do not include raw chain-of-thought.",
   ].join("\n");
 }
 
-async function scoreSelectedWindow(config: LlmConfig, service: ReturnType<typeof axService>, window: SelectedWindow) {
+function scorePacketInputChars(window: SelectedWindow): number {
+  return (
+    taskContext().length +
+    JSON.stringify(WINDOW_SCORE_SCHEMA).length +
+    JSON.stringify(window.baseline).length +
+    window.windowRef.length +
+    window.text.length
+  );
+}
+
+function estimatedTokens(chars: number): number {
+  return Math.ceil(chars / 4);
+}
+
+function estimatedCostUsd(
+  config: LlmConfig,
+  inputTokens: number,
+  outputTokens: number,
+): number | null {
+  if (config.inputUsdPerMillionTokens === undefined || config.outputUsdPerMillionTokens === undefined) {
+    return null;
+  }
+  return roundCurrency(
+    (inputTokens * config.inputUsdPerMillionTokens + outputTokens * config.outputUsdPerMillionTokens) / 1_000_000,
+  );
+}
+
+function roundCurrency(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+type ParsedLlmScore = {
+  windowRef: string;
+  scores: Scores;
+  dominant: Anchor;
+  confidence: number;
+  stateLabel: string | null;
+  reasoningSummary: string | null;
+  uncertainty: { level: string; reason: string | null } | null;
+  priorComparison: { summary: string | null; largestDeltaEmotion: Anchor; largestDelta: number } | null;
+  evidence: SelectedWindow["messageRefs"];
+};
+
+function parseResultJson(
+  value: unknown,
+  window: SelectedWindow,
+  allowPrivateOutput: boolean,
+): ParsedLlmScore {
+  const text = typeof value === "string" ? value : JSON.stringify(value);
+  const parsed = JSON.parse(text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "")) as Record<string, unknown>;
+  const rawScores = (parsed.scores && typeof parsed.scores === "object" ? parsed.scores : {}) as Record<string, unknown>;
+  const scores = Object.fromEntries(ANCHORS.map((anchor) => [anchor, clampNumber(rawScores[anchor])])) as Scores;
+  const evidence = sanitizeEvidence(parsed.evidence, window);
+  const dominantValue = typeof parsed.dominant === "string" && (ANCHORS as readonly string[]).includes(parsed.dominant)
+    ? parsed.dominant as Anchor
+    : dominant(scores);
+  return {
+    windowRef: typeof parsed.windowRef === "string" ? parsed.windowRef : window.windowRef,
+    scores,
+    dominant: dominantValue,
+    confidence: clampNumber(parsed.confidence),
+    stateLabel: safeProviderText(parsed.stateLabel, 80, allowPrivateOutput),
+    reasoningSummary: safeProviderText(parsed.reasoningSummary, 220, allowPrivateOutput),
+    uncertainty: sanitizeUncertainty(parsed.uncertainty, allowPrivateOutput),
+    priorComparison: sanitizePriorComparison(parsed.priorComparison, allowPrivateOutput),
+    evidence,
+  };
+}
+
+function sanitizeEvidence(value: unknown, window: SelectedWindow): SelectedWindow["messageRefs"] {
+  if (!Array.isArray(value)) return [];
+  const allowed = new Map(window.messageRefs.map((ref) => [ref.ref, ref]));
+  return value.slice(0, 5).flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const row = item as Record<string, unknown>;
+    const ref = typeof row.ref === "string" ? row.ref : "";
+    const known = allowed.get(ref);
+    if (known) return [known];
+    return [];
+  });
+}
+
+function safeProviderText(value: unknown, maxLength: number, allowPrivateOutput: boolean): string | null {
+  if (!allowPrivateOutput || typeof value !== "string") return null;
+  return value.slice(0, maxLength);
+}
+
+function sanitizeUncertainty(
+  value: unknown,
+  allowPrivateOutput: boolean,
+): ParsedLlmScore["uncertainty"] {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const level = typeof row.level === "string" ? row.level : "medium";
+  return {
+    level: ["low", "medium", "high"].includes(level) ? level : "medium",
+    reason: safeProviderText(row.reason, 160, allowPrivateOutput),
+  };
+}
+
+function sanitizePriorComparison(
+  value: unknown,
+  allowPrivateOutput: boolean,
+): ParsedLlmScore["priorComparison"] {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  const emotion = typeof row.largestDeltaEmotion === "string" && (ANCHORS as readonly string[]).includes(row.largestDeltaEmotion)
+    ? row.largestDeltaEmotion as Anchor
+    : "neutral";
+  return {
+    summary: safeProviderText(row.summary, 180, allowPrivateOutput),
+    largestDeltaEmotion: emotion,
+    largestDelta: Math.max(-1, Math.min(1, round(Number(row.largestDelta) || 0))),
+  };
+}
+
+async function scoreSelectedWindow(
+  config: LlmConfig,
+  service: ReturnType<typeof axService>,
+  window: SelectedWindow,
+  allowPrivateOutput: boolean,
+) {
   const started = performance.now();
   const output = await scoreWindowWithAx.forward(service, {
     taskContext: taskContext(),
+    schemaJson: JSON.stringify(WINDOW_SCORE_SCHEMA),
     baselineJson: JSON.stringify(window.baseline),
     windowRef: window.windowRef,
     windowText: window.text,
   });
   const latencyMs = round(performance.now() - started);
-  const scores: Scores = {
-    anger: clampNumber(output.anger),
-    disgust: clampNumber(output.disgust),
-    fear: clampNumber(output.fear),
-    joy: clampNumber(output.joy),
-    neutral: clampNumber(output.neutral),
-    sadness: clampNumber(output.sadness),
-    surprise: clampNumber(output.surprise),
-  };
+  const parsed = parseResultJson(output.resultJson, window, allowPrivateOutput);
+  const outputTokens = estimatedTokens(String(output.resultJson ?? "").length);
+  const inputTokens = estimatedTokens(window.inputChars);
   return {
     windowRef: window.windowRef,
+    sourceWindowId: window.sourceWindowId,
+    sourceRunId: window.sourceRunId,
     latencyMs,
-    stateLabel: typeof output.stateLabel === "string" ? output.stateLabel.slice(0, 80) : null,
-    confidence: clampNumber(output.confidence),
-    dominant: dominant(scores),
-    scores,
-    evidenceRefCount: Array.isArray(output.evidenceMessageRefs) ? output.evidenceMessageRefs.length : 0,
+    stateLabel: parsed.stateLabel,
+    confidence: parsed.confidence,
+    dominant: parsed.dominant,
+    scores: parsed.scores,
+    evidence: parsed.evidence,
+    evidenceRefCount: parsed.evidence.length,
+    reasoningSummary: parsed.reasoningSummary,
+    uncertainty: parsed.uncertainty,
+    priorComparison: parsed.priorComparison,
+    inputTokens,
+    outputTokens,
+    estimatedCostUsd: estimatedCostUsd(config, inputTokens, outputTokens),
   };
 }
 
@@ -868,6 +1349,8 @@ async function runLlm(
   windowing: NonNullable<Config["windowing"]>,
   selection: NonNullable<Config["selection"]>,
   configs: LlmConfig[],
+  noProvider: boolean,
+  allowPrivateOutput: boolean,
 ) {
   const results = [];
   for (const config of configs) {
@@ -878,28 +1361,31 @@ async function runLlm(
     const targets = targetsForRun(config, conversations, windowing, selection, deterministic);
     const windows = targets.slice(0, config.maxWindows ?? targets.length);
     const started = performance.now();
-    const service = axService(config);
-    const rows: LlmRow[] = await mapLimit(windows, config.concurrency ?? 4, async (window): Promise<LlmRow> => {
-      try {
-        return {
+    const rows: LlmRow[] = noProvider
+      ? windows.map((window) => ({
           ok: true,
-          ...(await scoreSelectedWindow(config, service, window)),
+          dryRun: true,
+          windowRef: window.windowRef,
+          sourceWindowId: window.sourceWindowId,
+          sourceRunId: window.sourceRunId,
+          messageCount: window.messageRefs.length,
+          inputChars: window.inputChars,
+          inputTokens: estimatedTokens(window.inputChars),
+          estimatedCostUsd: null,
           completionMs: round(performance.now() - started),
-        };
-      } catch (error) {
-        return {
-          ok: false,
-          error: redactError(error),
-          completionMs: round(performance.now() - started),
-        };
-      }
-    });
+        }))
+      : await providerRows(config, windows, started, allowPrivateOutput);
     const ok = rows.filter((row): row is Extract<LlmRow, { ok: true }> => row.ok);
-    const latencies = ok.map((row) => Number(row.latencyMs ?? 0));
+    const providerOk = ok.filter((row): row is Extract<LlmRow, { ok: true; dryRun?: never }> => !("dryRun" in row));
+    const latencies = providerOk.map((row) => Number(row.latencyMs ?? 0));
+    const inputTokens = ok.reduce((sum, row) => sum + Number(row.inputTokens ?? 0), 0);
+    const outputTokens = providerOk.reduce((sum, row) => sum + Number(row.outputTokens ?? 0), 0);
+    const costValues = ok.map((row) => row.estimatedCostUsd).filter((value): value is number => typeof value === "number");
     results.push({
       name: config.name,
       provider: config.provider,
       model: config.model,
+      dryRun: noProvider,
       runMode: config.runMode ?? "selected_windows",
       contextMode: config.contextMode ?? ((config.runMode ?? "selected_windows") === "whole_conversation" ? "full_conversation" : "window_only"),
       window: config.window ?? windowing[0],
@@ -908,22 +1394,50 @@ async function runLlm(
       errorCount: rows.length - ok.length,
       wallMs: round(performance.now() - started),
       avgLatencyMs: latencies.length ? round(latencies.reduce((sum, value) => sum + value, 0) / latencies.length) : null,
-      dominantCounts: countBy(ok.map((row) => String(row.dominant))),
-      avgConfidence: ok.length ? round(ok.reduce((sum, row) => sum + Number(row.confidence ?? 0), 0) / ok.length) : null,
-      evidenceCoverage: ok.length ? round(ok.filter((row) => Number(row.evidenceRefCount ?? 0) > 0).length / ok.length) : null,
+      tokenEstimate: {
+        input: inputTokens,
+        output: outputTokens,
+        total: inputTokens + outputTokens,
+      },
+      estimatedCostUsd: costValues.length ? roundCurrency(costValues.reduce((sum, value) => sum + value, 0)) : null,
+      dominantCounts: countBy(providerOk.map((row) => String(row.dominant))),
+      avgConfidence: providerOk.length ? round(providerOk.reduce((sum, row) => sum + Number(row.confidence ?? 0), 0) / providerOk.length) : null,
+      evidenceCoverage: providerOk.length ? round(providerOk.filter((row) => Number(row.evidenceRefCount ?? 0) > 0).length / providerOk.length) : null,
       firstResultMs: ok.length ? Math.min(...ok.map((row) => Number(row.completionMs))) : null,
       allResultsMs: ok.length ? Math.max(...ok.map((row) => Number(row.completionMs))) : null,
       sampleErrors: rows.filter((row) => !row.ok).map((row) => row.error).slice(0, 3),
       rows: rows.map((row) =>
-        row.ok
+        row.ok && "dryRun" in row
+          ? {
+              ok: true,
+              dryRun: true,
+              windowRef: row.windowRef,
+              sourceWindowId: row.sourceWindowId,
+              sourceRunId: row.sourceRunId,
+              messageCount: row.messageCount,
+              inputChars: row.inputChars,
+              inputTokens: row.inputTokens,
+              estimatedCostUsd: row.estimatedCostUsd,
+              completionMs: row.completionMs,
+            }
+          : row.ok
           ? {
               ok: true,
               windowRef: row.windowRef,
+              sourceWindowId: row.sourceWindowId,
+              sourceRunId: row.sourceRunId,
               latencyMs: row.latencyMs,
               completionMs: row.completionMs,
               dominant: row.dominant,
               confidence: row.confidence,
+              evidence: row.evidence,
               evidenceRefCount: row.evidenceRefCount,
+              reasoningSummary: row.reasoningSummary,
+              uncertainty: row.uncertainty,
+              priorComparison: row.priorComparison,
+              inputTokens: row.inputTokens,
+              outputTokens: row.outputTokens,
+              estimatedCostUsd: row.estimatedCostUsd,
               scores: row.scores,
             }
           : {
@@ -935,6 +1449,30 @@ async function runLlm(
     });
   }
   return results;
+}
+
+async function providerRows(
+  config: LlmConfig,
+  windows: SelectedWindow[],
+  started: number,
+  allowPrivateOutput: boolean,
+): Promise<LlmRow[]> {
+  const service = axService(config);
+  return mapLimit(windows, config.concurrency ?? 4, async (window): Promise<LlmRow> => {
+    try {
+      return {
+        ok: true,
+        ...(await scoreSelectedWindow(config, service, window, allowPrivateOutput)),
+        completionMs: round(performance.now() - started),
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: redactError(error),
+        completionMs: round(performance.now() - started),
+      };
+    }
+  });
 }
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -1000,32 +1538,46 @@ async function main() {
   loadEnv();
   const args = parseArgs();
   const config = loadConfig(args.config);
-  const includeWindowText = Boolean(config.dataset?.includeWindowTextInOutput);
+  const includeWindowText = Boolean(args.allowPrivateOutput && config.dataset?.includeWindowTextInOutput);
   assertSafeRawOutputPath(args.out, includeWindowText);
   mkdirSync(OUT_DIR, { recursive: true });
 
-  const conversations = loadDataset(config);
+  const dataset = loadDataset(config);
+  const conversations = dataset.conversations;
   const windowing = mergedWindowing(config.windowing ?? [{ size: 8, stride: 4 }], config.llm ?? []);
   const deterministicNames = config.deterministic ?? ["roberta_emotion", "emoji_keyword_features"];
   const deterministic = await runDeterministic(conversations, windowing, deterministicNames, includeWindowText);
   const selection = config.selection ?? {};
   const selectedWindows = selectWindows(conversations, windowing[0] ?? { size: 8, stride: 4 }, selection, deterministic);
-  const llm = await runLlm(conversations, deterministic, windowing, selection, config.llm ?? []);
+  const llm = await runLlm(
+    conversations,
+    deterministic,
+    windowing,
+    selection,
+    config.llm ?? [],
+    args.noProvider,
+    args.allowPrivateOutput,
+  );
 
   const result = {
     generatedAt: new Date().toISOString(),
     runName: config.runName,
     anchors: ANCHORS,
     providerEnvVarsDetected: providerEnvVars(),
+    noProvider: args.noProvider,
     privacy: includeWindowText
       ? "Private messages may be read locally and sent to configured Ax LLM providers for selected windows. This local review run includes raw window text in ignored out/ artifacts; do not commit those outputs."
-      : "Private messages may be read locally and sent to configured Ax LLM providers only for selected windows; persisted output omits raw private text.",
+      : "Private messages may be read locally and sent to configured Ax LLM providers only when provider mode is enabled; persisted output omits raw private text and evidence uses message refs only.",
     dataset: {
+      source: dataset.source,
       conversationCount: conversations.length,
       kinds: countBy(conversations.map((conversation) => conversation.kind)),
       conversations: conversations.map((conversation) => ({
         id: conversation.id,
         kind: conversation.kind,
+        sourceConversationId: conversation.sourceConversationId,
+        nativeRunId: conversation.nativeRunId,
+        nativeWindowCount: conversation.nativeWindows?.length ?? 0,
         fullMessageCount: conversation.fullMessageCount ?? conversation.messages.length,
         loadedMessageCount: conversation.messages.length,
       })),
@@ -1065,6 +1617,9 @@ async function main() {
           wallMs: row.wallMs,
           avgLatencyMs: row.avgLatencyMs,
           avgConfidence: row.avgConfidence,
+          tokenEstimate: row.tokenEstimate,
+          estimatedCostUsd: row.estimatedCostUsd,
+          dryRun: row.dryRun,
           skipped: row.skipped,
           sampleErrors: row.sampleErrors,
         })),

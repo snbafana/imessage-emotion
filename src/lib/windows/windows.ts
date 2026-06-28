@@ -10,6 +10,10 @@ export interface RunWindowConfig {
   minFocalMessages: number
 }
 
+export type ComparativeRunWindowConfig = RunWindowConfig & {
+  mode: 'comparative-message-count'
+}
+
 export interface WindowRange {
   startOrdinal: number
   endOrdinal: number
@@ -23,6 +27,16 @@ export interface RunWindowRange extends WindowRange {
   focalEndOrdinal: number
   contextMessageCount: number
   focalMessageCount: number
+}
+
+export interface CappedRunWindowOptions {
+  maxWindows: number
+  overlapPercent: number
+}
+
+export interface CappedRunWindowPlan {
+  config: ComparativeRunWindowConfig
+  windowCount: number
 }
 
 type MessageBoundary = {
@@ -107,6 +121,34 @@ export function planRunWindowRanges(lastOrdinal: number, config: RunWindowConfig
     if (fullFocalEndOrdinal >= lastOrdinal) break
   }
   return ranges
+}
+
+export function planCappedRunWindowConfig(
+  lastOrdinal: number,
+  options: CappedRunWindowOptions,
+): CappedRunWindowPlan {
+  validatePositiveInteger('lastOrdinal', lastOrdinal, true)
+  validatePositiveInteger('maxWindows', options.maxWindows)
+  if (!Number.isInteger(options.overlapPercent) || options.overlapPercent < 10 || options.overlapPercent > 40) {
+    throw new RangeError('overlapPercent must be an integer between 10 and 40')
+  }
+
+  let focalMessages = Math.max(
+    24,
+    Math.ceil(lastOrdinal / Math.max(1, options.maxWindows * (1 - options.overlapPercent / 100))),
+  )
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const config = buildCappedConfig(lastOrdinal, focalMessages, options.overlapPercent)
+    const windowCount = planRunWindowRanges(lastOrdinal, config).length
+    if (windowCount <= options.maxWindows || focalMessages >= lastOrdinal) {
+      return { config, windowCount }
+    }
+    focalMessages = Math.ceil(focalMessages * 1.15)
+  }
+
+  const config = buildCappedConfig(lastOrdinal, focalMessages, options.overlapPercent)
+  return { config, windowCount: planRunWindowRanges(lastOrdinal, config).length }
 }
 
 export function createWindowsForRun(
@@ -215,6 +257,25 @@ function getLastConversationOrdinal(db: AppDatabase, conversationId: number): nu
     )
     .get(conversationId) as { last_ordinal: number | null }
   return row.last_ordinal ?? 0
+}
+
+function buildCappedConfig(
+  lastOrdinal: number,
+  focalMessages: number,
+  overlapPercent: number,
+): ComparativeRunWindowConfig {
+  const minFocalMessages = Math.max(8, Math.ceil(focalMessages / 2))
+  const contextMessages = Math.min(
+    Math.max(focalMessages * 2, 32),
+    Math.max(1, lastOrdinal - minFocalMessages),
+  )
+  return {
+    mode: 'comparative-message-count',
+    contextMessages,
+    focalMessages,
+    stride: Math.max(1, Math.round(focalMessages * (1 - overlapPercent / 100))),
+    minFocalMessages,
+  }
 }
 
 function validateWindowConfig(

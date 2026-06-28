@@ -7,8 +7,6 @@ import {
   type ConversationChatPacket,
 } from './retrieve'
 
-export type { AskConversationInput, ConversationChatPacket }
-
 export interface ChatCitation {
   type: 'window' | 'message' | 'run'
   id: number

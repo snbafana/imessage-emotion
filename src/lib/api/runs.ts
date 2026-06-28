@@ -17,7 +17,7 @@ type RunRow = {
   error: string | null
 }
 
-type WindowRow = {
+export type AnalysisWindowRow = {
   id: number
   run_id: number
   conversation_id: number
@@ -31,6 +31,8 @@ type WindowRow = {
   message_count: number
   context_message_count: number
   focal_message_count: number
+  start_sent_at: number | null
+  end_sent_at: number | null
   window_metadata_json: string | null
   result_json: string | null
   shift_json: string | null
@@ -45,7 +47,7 @@ function mapRun(row: RunRow): RunSummary {
     id: row.id,
     conversationId: row.conversation_id ?? 0,
     methodKey: row.method_key ?? 'unknown',
-    status: mapStatus(row.status),
+    status: mapRunStatus(row.status),
     startedAt: row.started_at,
     completedAt: row.completed_at,
     windowConfig: parseJsonRecord(row.window_config_json),
@@ -57,7 +59,7 @@ function mapRun(row: RunRow): RunSummary {
   }
 }
 
-function mapWindow(row: WindowRow): AnalysisWindow {
+export function mapAnalysisWindow(row: AnalysisWindowRow): AnalysisWindow {
   return {
     id: row.id,
     runId: row.run_id,
@@ -72,17 +74,19 @@ function mapWindow(row: WindowRow): AnalysisWindow {
     messageCount: row.message_count,
     contextMessageCount: row.context_message_count,
     focalMessageCount: row.focal_message_count,
+    startSentAt: row.start_sent_at,
+    endSentAt: row.end_sent_at,
     metadata: parseJsonRecord(row.window_metadata_json),
     result: parseJsonRecord(row.result_json),
     shift: parseJsonRecord(row.shift_json),
-    status: mapStatus(row.status),
+    status: mapRunStatus(row.status),
     latencyMs: row.latency_ms,
     error: row.error,
     createdAt: row.created_at,
   }
 }
 
-function mapStatus(status: string): RunStatus {
+export function mapRunStatus(status: string): RunStatus {
   if (status === 'complete') return 'completed'
   if (status === 'running' || status === 'completed' || status === 'error') return status
   return 'pending'
@@ -134,6 +138,8 @@ export function getRunWindows(db: AppDatabase, runId: number): AnalysisWindow[] 
         w.message_count,
         w.context_message_count,
         w.focal_message_count,
+        sm.sent_at AS start_sent_at,
+        em.sent_at AS end_sent_at,
         w.window_metadata_json,
         w.result_json,
         w.shift_json,
@@ -142,18 +148,12 @@ export function getRunWindows(db: AppDatabase, runId: number): AnalysisWindow[] 
         w.error,
         w.created_at
       FROM windows w
+      LEFT JOIN messages sm ON sm.id = w.start_message_id
+      LEFT JOIN messages em ON em.id = w.end_message_id
       WHERE w.run_id = ?
       ORDER BY w.ordinal, w.id
     `,
     )
-    .all(runId) as WindowRow[]
-  return rows.map(mapWindow)
-}
-
-export function getRunWindow(
-  db: AppDatabase,
-  runId: number,
-  windowId: number,
-): AnalysisWindow | null {
-  return getRunWindows(db, runId).find((window) => window.id === windowId) ?? null
+    .all(runId) as AnalysisWindowRow[]
+  return rows.map(mapAnalysisWindow)
 }

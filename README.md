@@ -23,11 +23,12 @@ the machine.
    deduping contacts/conversations/messages. Each message gets a deterministic
    `conversation_ordinal` (chronological, with rowid/guid tie-breakers).
 2. **Analyze** — an analysis *run* slices a conversation into run-owned
-   *windows* (context + focal message ranges) and scores each on the Ekman
-   anchors (anger / disgust / fear / joy / neutral / sadness / surprise) — a
-   lexical baseline or the Ax LLM scorer (`agent/tools/score_window`).
-3. **Detect shifts** — windows are compared against a rolling baseline to flag
-   warmer/tenser shifts and surface the strongest drivers.
+   *windows* (context + focal message ranges) and scores each with the real Ax
+   LLM scorer on the Ekman anchors: anger / disgust / fear / joy / neutral /
+   sadness / surprise. There is no lexical fallback for analysis runs; missing
+   credentials or model errors fail visibly.
+3. **Detect shifts** — windows are compared against the prior conversation state
+   to flag sharp emotional moves and surface the strongest drivers.
 4. **Explore** — the dashboard shows the emotion timeline (colored composition
    blocks + a valence line); the chat panel answers questions about a selected
    window, grounded in its messages.
@@ -45,6 +46,18 @@ The app stores its DB at
 conversation (the **Recompute (ax)** button) to analyze it — the sidebar shows
 only conversations that have been analyzed.
 
+For high-fidelity local analysis of the five largest one-on-one conversations:
+
+```bash
+pnpm runs:top-ax -- --delete-existing --limit 5 --max-windows 200 --overlap 25 --model google/gemini-2.5-flash
+```
+
+The default run planner targets at most 200 windows per conversation with 25%
+overlap, and rejects overlap outside 10-40%. That keeps the analysis high
+fidelity without turning long relationships into unreadable thousand-window
+timelines. It still does one real model call per window and stores the model's
+per-window rationale plus per-emotion rationales in the run result.
+
 ## Commands
 
 | Command | Description |
@@ -60,7 +73,7 @@ only conversations that have been analyzed.
 - `app/` — Next.js routes; `app/api/trpc/[trpc]` exposes the tRPC router.
 - `src/server/` — tRPC router + procedures.
 - `src/lib/` — framework-agnostic core: `imessage` parsing, `db` schema +
-  connection, `import`, `windows`, `emotion` (baseline + shifts), `chat`.
+  connection, `import`, `windows`, `emotion` (Ax scoring + shifts), `chat`.
 - `src/dashboard/` — the React dashboard and its tRPC-backed data client.
 
 ## Privacy

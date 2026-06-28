@@ -159,11 +159,10 @@ function getRunSummary(db: AppDatabase, runId: number): ChatRunSummary {
   const row = db.prepare('SELECT * FROM analysis_runs WHERE id = ?').get(runId) as Row | undefined
   if (!row) throw new Error(`Analysis run ${runId} was not found`)
 
-  const scorer = getLegacyScorer(db, numberOrNull(row.scorer_config_id))
   return {
     id: numberValue(row.id),
     conversationId: numberOrNull(row.conversation_id),
-    methodKey: stringValue(row.method_key) ?? scorer?.key ?? null,
+    methodKey: stringValue(row.method_key),
     status: stringValue(row.status) ?? 'unknown',
     summary: jsonObject(row.summary_json) ?? {},
     startedAt: numberOrNull(row.started_at),
@@ -172,49 +171,23 @@ function getRunSummary(db: AppDatabase, runId: number): ChatRunSummary {
 }
 
 function listRunWindows(db: AppDatabase, runId: number, conversationId: number): ChatWindow[] {
-  const windowColumns = columnsFor(db, 'windows')
-  const hasRunOwnedWindows = windowColumns.has('run_id')
-  if (hasRunOwnedWindows) {
-    const order = windowColumns.has('ordinal') ? 'ordinal, id' : 'start_ordinal, id'
-    const rows = db
-      .prepare(
-        `
-        SELECT *
-        FROM windows
-        WHERE run_id = ? AND conversation_id = ?
-        ORDER BY ${order}
-      `,
-      )
-      .all(runId, conversationId) as Row[]
-    return rows.map((row) => windowFromRow(db, row, runId, conversationId))
-  }
-
-  const hasWindowResults = tableExists(db, 'window_results')
-  const resultJoin = hasWindowResults
-    ? 'LEFT JOIN window_results wr ON wr.run_id = rw.run_id AND wr.window_id = w.id'
-    : ''
-  const resultSelect = hasWindowResults ? ', wr.result_json AS joined_result_json' : ''
   const rows = db
     .prepare(
       `
-      SELECT w.*, rw.status AS run_window_status${resultSelect}
-      FROM run_windows rw
-      JOIN windows w ON w.id = rw.window_id
-      ${resultJoin}
-      WHERE rw.run_id = ? AND w.conversation_id = ?
-      ORDER BY w.start_ordinal, w.id
+      SELECT *
+      FROM windows
+      WHERE run_id = ? AND conversation_id = ?
+      ORDER BY ordinal, id
     `,
     )
     .all(runId, conversationId) as Row[]
-  return rows.map((row, index) => windowFromRow(db, row, runId, conversationId, index + 1))
+  return rows.map((row) => windowFromRow(row, runId, conversationId))
 }
 
 function windowFromRow(
-  db: AppDatabase,
   row: Row,
   runId: number,
   conversationId: number,
-  fallbackOrdinal: number | null = null,
 ): ChatWindow {
   const startOrdinal = numberValue(row.start_ordinal)
   const endOrdinal = numberValue(row.end_ordinal)
@@ -222,17 +195,12 @@ function windowFromRow(
   const contextEndOrdinal = numberOrNull(row.context_end_ordinal)
   const focalStartOrdinal = numberOrNull(row.focal_start_ordinal) ?? startOrdinal
   const focalEndOrdinal = numberOrNull(row.focal_end_ordinal) ?? endOrdinal
-  const result = jsonObject(row.result_json) ?? jsonObject(row.joined_result_json) ?? {}
-  const shift =
-    jsonObject(row.shift_json) ??
-    getLegacyShift(db, runId, conversationId, numberValue(row.id)) ??
-    {}
 
   return {
     id: numberValue(row.id),
     runId: numberOrNull(row.run_id) ?? runId,
     conversationId: numberOrNull(row.conversation_id) ?? conversationId,
-    ordinal: numberOrNull(row.ordinal) ?? fallbackOrdinal,
+    ordinal: numberOrNull(row.ordinal),
     startOrdinal,
     endOrdinal,
     contextStartOrdinal,
@@ -246,10 +214,10 @@ function windowFromRow(
       numberOrNull(row.context_message_count) ?? rangeCount(contextStartOrdinal, contextEndOrdinal),
     focalMessageCount:
       numberOrNull(row.focal_message_count) ?? rangeCount(focalStartOrdinal, focalEndOrdinal),
-    metadata: jsonObject(row.window_metadata_json) ?? legacyWindowMetadata(row),
-    result,
-    shift,
-    status: stringValue(row.status) ?? stringValue(row.run_window_status),
+    metadata: jsonObject(row.window_metadata_json) ?? {},
+    result: jsonObject(row.result_json) ?? {},
+    shift: jsonObject(row.shift_json) ?? {},
+    status: stringValue(row.status),
   }
 }
 
@@ -283,75 +251,6 @@ function getMessages(
         role,
       }
     })
-}
-
-function getLegacyScorer(
-  db: AppDatabase,
-  scorerConfigId: number | null,
-): { key: string; label: string } | null {
-  if (scorerConfigId === null || !tableExists(db, 'scorer_configs')) return null
-  const row = db
-    .prepare('SELECT key, label FROM scorer_configs WHERE id = ?')
-    .get(scorerConfigId) as Row | undefined
-  if (!row) return null
-  return {
-    key: stringValue(row.key) ?? '',
-    label: stringValue(row.label) ?? '',
-  }
-}
-
-function getLegacyShift(
-  db: AppDatabase,
-  runId: number,
-  conversationId: number,
-  windowId: number,
-): Record<string, unknown> | null {
-  if (!tableExists(db, 'shifts')) return null
-  const row = db
-    .prepare(
-      `
-      SELECT result_json
-      FROM shifts
-      WHERE run_id = ? AND conversation_id = ? AND to_window_id = ?
-      ORDER BY id DESC
-      LIMIT 1
-    `,
-    )
-    .get(runId, conversationId, windowId) as Row | undefined
-  return jsonObject(row?.result_json)
-}
-
-function legacyWindowMetadata(row: Row): Record<string, unknown> {
-  return {
-    deterministicKey: stringValue(row.deterministic_key) ?? null,
-    windowConfigId: numberOrNull(row.window_config_id),
-    startAt: numberOrNull(row.start_at),
-    endAt: numberOrNull(row.end_at),
-  }
-}
-
-function columnsFor(db: AppDatabase, table: string): Set<string> {
-  return new Set(
-    db
-      .prepare(`PRAGMA table_info(${checkedIdentifier(table)})`)
-      .all()
-      .map((row) => stringValue((row as Row).name))
-      .filter((name): name is string => name !== null),
-  )
-}
-
-function tableExists(db: AppDatabase, table: string): boolean {
-  const row = db
-    .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
-    .get(table)
-  return Boolean(row)
-}
-
-function checkedIdentifier(identifier: string): string {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(identifier)) {
-    throw new Error(`Unsafe SQL identifier: ${identifier}`)
-  }
-  return identifier
 }
 
 function rangeCount(start: number | null, end: number | null): number {

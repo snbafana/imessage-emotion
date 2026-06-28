@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { describe, expect, it } from 'vitest'
 import { migrate, type AppDatabase } from '../db/schema'
-import { createBaselineRun } from '../emotion/run-baseline'
+import { createAxAnalysisRun, AX_METHOD_KEY, type AxWindowScorer } from '../emotion/run-analysis'
 import { createWindowsForRun, planRunWindowRanges, planWindowRanges } from './windows'
 
 function createMemoryDb(): AppDatabase {
@@ -112,12 +112,24 @@ describe('window planning', () => {
 })
 
 describe('run-owned window persistence', () => {
-  it('creates separate rows for identical ordinal ranges in separate runs', () => {
+  it('creates separate rows for identical ordinal ranges in separate runs', async () => {
     const db = createMemoryDb()
     const conversationId = seedConversation(db, 150)
 
-    const firstRun = createBaselineRun(db, conversationId)
-    const secondRun = createBaselineRun(db, conversationId)
+    const firstRun = await createAxAnalysisRun(db, conversationId, {
+      contextMessages: 100,
+      focalMessages: 50,
+      stride: 50,
+      minFocalMessages: 25,
+      scorer: fakeScorer,
+    })
+    const secondRun = await createAxAnalysisRun(db, conversationId, {
+      contextMessages: 100,
+      focalMessages: 50,
+      stride: 50,
+      minFocalMessages: 25,
+      scorer: fakeScorer,
+    })
 
     const rows = db
       .prepare(
@@ -142,7 +154,7 @@ describe('run-owned window persistence', () => {
       [firstRun.runId, 1, 150],
       [secondRun.runId, 1, 150],
     ])
-    expect(JSON.parse(rows[0].result_json).scores.joy).toBeGreaterThan(0)
+    expect(JSON.parse(rows[0].result_json).method).toBe(AX_METHOD_KEY)
   })
 
   it('stores context and focal boundaries on the run-owned window', () => {
@@ -160,7 +172,7 @@ describe('run-owned window persistence', () => {
           scorer_config_json,
           started_at
         )
-        VALUES (?, 'baseline-v1', 'running', '{}', '{}', '{}', ?)
+        VALUES (?, 'ax-llm-v1', 'running', '{}', '{}', '{}', ?)
       `,
       )
       .run(conversationId, Date.now())
@@ -229,4 +241,28 @@ describe('run-owned window persistence', () => {
       },
     ])
   })
+})
+
+const fakeScorer: AxWindowScorer = async () => ({
+  scores: {
+    anger: 0,
+    disgust: 0,
+    fear: 0,
+    joy: 0.75,
+    neutral: 0.25,
+    sadness: 0,
+    surprise: 0,
+  },
+  dominant: 'joy',
+  confidence: 0.9,
+  summary: 'test scorer',
+  rationale: 'test rationale',
+  scoreRationales: { joy: 'test joy rationale' },
+  evidenceMessageIds: [],
+  method: 'ax-llm-v1',
+  scorer: 'ax-llm',
+  provider: 'openai',
+  model: 'test-model',
+  effort: 'medium',
+  promptKey: 'test',
 })

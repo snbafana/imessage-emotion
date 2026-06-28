@@ -115,12 +115,13 @@ export interface RunSummary {
   completedAt: number | null
   windowConfig?: RunWindowConfigMetadata | Record<string, unknown>
   scorerConfig?: Record<string, unknown>
-  summary: RunSummaryMetadata | Record<string, unknown>
-  summaryJson?: Record<string, unknown>
+  summary: Record<string, unknown>
   error?: string | null
 }
 
 export type EmotionScores = Record<string, number>
+export type EmotionAnchor = import('../emotion/anchors').Anchor
+export type LabelAmbiguity = 'low' | 'medium' | 'high'
 
 export interface WindowResult {
   scores?: EmotionScores
@@ -130,78 +131,6 @@ export interface WindowResult {
   evidenceMessageIds?: number[]
   method?: string
   [key: string]: unknown
-}
-
-export interface ShiftThresholds {
-  baselineWindowMin: number
-  baselineWindowMax: number
-  minorDelta: number
-  majorDelta: number
-}
-
-export type ShiftSeverity = 'major' | 'minor' | 'none'
-export type ShiftTrend = 'warmer' | 'tenser' | 'mixed' | 'stable'
-
-export interface EmotionDelta {
-  emotion: string
-  baseline: number
-  current: number
-  delta: number
-  direction: 'increase' | 'decrease' | 'flat'
-  severity: ShiftSeverity
-  label: string
-}
-
-export interface WindowShiftMetadata {
-  method: 'rolling-shift-v1'
-  status: 'pending_baseline' | 'stable' | 'minor_shift' | 'major_shift' | 'missing_scores'
-  windowId: number
-  ordinal: number
-  baselineWindowIds: number[]
-  baselineWindowCount: number
-  thresholds: ShiftThresholds
-  scores: EmotionScores
-  baselineScores: EmotionScores
-  deltas: Record<string, number>
-  strongest: EmotionDelta[]
-  strongestLabel: string | null
-  trend: ShiftTrend
-  trendScore: number
-  contextLabel: string | null
-}
-
-export interface DashboardShift {
-  windowId: number
-  ordinal: number
-  label: string
-  emotion: string
-  delta: number
-  severity: Exclude<ShiftSeverity, 'none'>
-  trend: ShiftTrend
-  contextLabel: string | null
-}
-
-export interface RunSummaryMetadata {
-  method: 'rolling-shift-summary-v1'
-  runId: number
-  status: string
-  isPending: boolean
-  isIncomplete: boolean
-  windowCount: number
-  scoredWindowCount: number
-  pendingWindowCount: number
-  shiftedWindowCount: number
-  majorShiftCount: number
-  minorShiftCount: number
-  stableWindowCount: number
-  strongestShift: DashboardShift | null
-  strongestTrend: ShiftTrend
-  counts: {
-    byTrend: Record<string, number>
-    byEmotion: Record<string, number>
-  }
-  thresholds: ShiftThresholds
-  updatedAt: string
 }
 
 export interface AnalysisWindow {
@@ -218,12 +147,12 @@ export interface AnalysisWindow {
   messageCount: number
   contextMessageCount: number
   focalMessageCount: number
+  startSentAt?: number | null
+  endSentAt?: number | null
   metadata: JsonRecord
   status: RunStatus
   result: WindowResult
-  resultJson?: WindowResult
-  shift: WindowShiftMetadata | Record<string, unknown>
-  shiftJson?: Record<string, unknown>
+  shift: Record<string, unknown>
   latencyMs: number | null
   error?: string | null
   createdAt: number
@@ -243,12 +172,10 @@ export interface WindowMessage {
   isRead: boolean
   hasAttachments: boolean
   status: string
-  slice: WindowMessageSlice
+  slice: LabelingMessageSlice
 }
 
-export interface BaselineRunOptions {
-  methodKey?: string
-  windowSize?: number
+export interface AnalysisRunOptions {
   contextMessages?: number
   focalMessages?: number
   stride?: number
@@ -258,21 +185,73 @@ export interface BaselineRunOptions {
 }
 
 export type WindowMessageSlice = 'all' | 'full' | 'context' | 'focal'
+export type LabelingMessageSlice = WindowMessageSlice | 'before' | 'after'
 
-export interface WindowMessagesResult {
-  window: AnalysisWindow
-  slice: WindowMessageSlice
-  messages: WindowMessage[]
+export interface WindowLabel {
+  id: number
+  windowId: number
+  labeler: string
+  dominant: EmotionAnchor | null
+  acceptableDominants: EmotionAnchor[]
+  scores: Partial<Record<EmotionAnchor, number>>
+  requiresContext: boolean | null
+  sarcasmOrSubtext: boolean | null
+  ambiguity: LabelAmbiguity | null
+  stateLabel: string | null
+  evidenceMessageRefs: number[]
+  pivotalMessageRefs: number[]
+  notes: string | null
+  createdAt: number
+  updatedAt: number
 }
 
-export interface ChatTurn {
-  role: 'user' | 'assistant'
-  text: string
-  citations?: Array<{
-    messageId?: number
-    windowId?: number
-    label: string
-  }>
+export interface WindowPrediction {
+  dominant: string | null
+  confidence: number | null
+  scores: EmotionScores
+  summary: string | null
+  evidenceMessageIds: number[]
+}
+
+export interface LabelingWindowSummary {
+  window: AnalysisWindow
+  conversation: Pick<
+    ConversationSummary,
+    'id' | 'title' | 'participantSummary' | 'messageCount' | 'firstMessageAt' | 'lastMessageAt'
+  >
+  run: Pick<RunSummary, 'id' | 'methodKey' | 'status' | 'startedAt' | 'windowConfig'>
+  prediction: WindowPrediction
+  label: WindowLabel | null
+}
+
+export interface LabelingWindowDetail extends LabelingWindowSummary {
+  beforeMessages: WindowMessage[]
+  contextMessages: WindowMessage[]
+  focalMessages: WindowMessage[]
+  allMessages: WindowMessage[]
+  afterMessages: WindowMessage[]
+}
+
+export interface ListLabelingWindowsInput {
+  conversationId?: number
+  runId?: number
+  labeler?: string
+  limit?: number
+}
+
+export interface SaveWindowLabelInput {
+  windowId: number
+  labeler?: string
+  dominant?: EmotionAnchor | null
+  acceptableDominants?: EmotionAnchor[]
+  scores?: Partial<Record<EmotionAnchor, number>>
+  requiresContext?: boolean | null
+  sarcasmOrSubtext?: boolean | null
+  ambiguity?: LabelAmbiguity | null
+  stateLabel?: string | null
+  evidenceMessageRefs?: number[]
+  pivotalMessageRefs?: number[]
+  notes?: string | null
 }
 
 export interface AskConversationInput {

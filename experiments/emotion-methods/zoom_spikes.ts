@@ -105,10 +105,15 @@ function normalize(scores: Scores): Scores {
   return Object.fromEntries(ANCHORS.map((anchor) => [anchor, round(Math.min(1, scores[anchor] / max))])) as Scores;
 }
 
-let robertaEmotionClassifier: ReturnType<typeof pipeline> | null = null;
+type EmotionClassifier = (
+  input: string | string[],
+  options: { top_k: number; truncation: boolean },
+) => Promise<Array<{ label: string; score: number }> | Array<Array<{ label: string; score: number }>>>;
+
+let robertaEmotionClassifier: EmotionClassifier | null = null;
 
 async function robertaEmotion() {
-  robertaEmotionClassifier ??= pipeline("text-classification", ROBERTA_EMOTION_MODEL, { dtype: "q8" });
+  robertaEmotionClassifier ??= await pipeline("text-classification", ROBERTA_EMOTION_MODEL, { dtype: "q8" }) as unknown as EmotionClassifier;
   return robertaEmotionClassifier;
 }
 

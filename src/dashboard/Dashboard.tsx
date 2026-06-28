@@ -5,6 +5,7 @@ import { useEveAgent } from 'eve/react'
 import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
 import EmotionTimeline from './EmotionTimeline'
+import type { AnalysisSetupPlan, AnalysisSetupValue } from './EmotionTimeline'
 import ChatPanel from './ChatPanel'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
@@ -24,8 +25,21 @@ import {
   type WindowView,
 } from './data'
 import { RecalcIcon, SettingsIcon } from './icons'
-import type { SyncStatus } from '../lib/api/types'
+import type { AnalysisRunOptions, SyncStatus } from '../lib/api/types'
+import { planCappedRunWindowConfig, planRunWindowRanges } from '../lib/windows/windows'
 import './dashboard.css'
+
+const DEFAULT_ANALYSIS_SETUP: AnalysisSetupValue = {
+  planner: 'capped',
+  provider: 'openrouter',
+  effort: 'medium',
+  model: 'google/gemini-2.5-flash',
+  maxWindows: 200,
+  overlapPercent: 25,
+  contextMessages: 80,
+  focalMessages: 40,
+  minFocalMessages: 20,
+}
 
 export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const api = useMemo(() => getDashboardApi(), [])
@@ -47,18 +61,24 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [analysisSetup, setAnalysisSetup] =
+    useState<AnalysisSetupValue>(DEFAULT_ANALYSIS_SETUP)
+  const [analysisRunning, setAnalysisRunning] = useState(false)
   // null = no active search (show everything); a Set = the conversation ids
   // whose participants matched the contacts FTS query.
   const [matchedConversationIds, setMatchedConversationIds] = useState<Set<string> | null>(null)
 
   const visibleConversations = useMemo(
-    () =>
-      matchedConversationIds === null
-        ? conversations
-        : conversations.filter((conversation) =>
-            matchedConversationIds.has(String(conversation.rawId)),
-          ),
-    [conversations, matchedConversationIds],
+    () => {
+      const query = searchQuery.trim().toLowerCase()
+      if (!query) return conversations
+      return conversations.filter(
+        (conversation) =>
+          conversationMatchesQuery(conversation, query) ||
+          matchedConversationIds?.has(String(conversation.rawId)),
+      )
+    },
+    [conversations, matchedConversationIds, searchQuery],
   )
 
   const chat = useEveAgent()
@@ -76,6 +96,13 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
   const isSyncing =
     syncStatus?.messages.state === 'syncing' || syncStatus?.contacts.state === 'syncing'
   const syncStatusLine = syncError ?? actionStatus ?? formatSyncStatus(syncStatus)
+  const setupPlan = useMemo(
+    () =>
+      selectedConversation
+        ? buildAnalysisSetupPlan(analysisSetup, selectedConversation.messageCount)
+        : null,
+    [analysisSetup, selectedConversation],
+  )
 
   const reloadConversations = useCallback(async () => {
     if (!hasConversationApi(api)) {
@@ -87,10 +114,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
     setConversationLoading(true)
     setConversationError(null)
     try {
-      // Only surface conversations that have been analyzed (have a run).
-      const next = normalizeConversations(await api.listConversations()).filter(
-        (conversation) => conversation.latestRun != null,
-      )
+      const next = normalizeConversations(await api.listConversations())
       setConversations(next)
       setActiveId((current) =>
         current && next.some((conversation) => conversation.id === current)
@@ -289,13 +313,43 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
   // Drive a full ax recompute through the eve agent so it streams window-by-window
   // in the chat; reload the timeline once the turn finishes.
   function recomputeWithAx() {
-    if (!selectedConversation || chatBusy) return
+    if (!selectedConversation || chatBusy || !setupPlan || setupPlan.error) return
     recomputingRef.current = true
-    setActionStatus('Recomputing with the ax scorer — streaming in chat…')
+    setActionStatus(`Recomputing with ${analysisSetup.model}...`)
     void chat.send({
-      message: `Recompute the emotion timeline for this conversation end-to-end with the ax scorer at medium effort, window by window, then summarize the arc.`,
-      clientContext: { action: 'recompute', conversationId: Number(selectedConversation.rawId) },
+      message: [
+        'Recompute the emotion timeline for this conversation end-to-end with the Ax scorer.',
+        `Use model ${analysisSetup.model}, provider ${analysisSetup.provider}, effort ${analysisSetup.effort}.`,
+        `Use maxWindows ${analysisSetup.maxWindows}, overlapPercent ${analysisSetup.overlapPercent}, and messageCount ${selectedConversation.messageCount}.`,
+        'Score window by window, then summarize the arc.',
+      ].join(' '),
+      clientContext: {
+        action: 'recompute',
+        conversationId: Number(selectedConversation.rawId),
+        messageCount: selectedConversation.messageCount,
+        analysisSetup,
+      },
     })
+  }
+
+  async function createConfiguredAnalysisRun() {
+    if (!selectedConversation || !api?.createAnalysisRun || !setupPlan || setupPlan.error) return
+
+    setAnalysisRunning(true)
+    setRunError(null)
+    setActionStatus(`Running Ax analysis with ${analysisSetup.model}...`)
+    try {
+      const options = analysisRunOptions(analysisSetup, setupPlan)
+      await api.createAnalysisRun(Number(selectedConversation.rawId), options)
+      await reloadConversations()
+      await reloadRun(selectedConversation)
+      setActionStatus(`Analysis finished with ${analysisSetup.model}.`)
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : 'Analysis run failed.')
+      setActionStatus(null)
+    } finally {
+      setAnalysisRunning(false)
+    }
   }
 
   function selectRun(runId: string) {
@@ -322,12 +376,6 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
-      {onOpenSettings ? (
-        <Button className="settings-toggle" onClick={onOpenSettings}>
-          <SettingsIcon />
-          Settings
-        </Button>
-      ) : null}
 
       <div className="main">
         <header className="header-bar">
@@ -349,6 +397,12 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
             )}
           </div>
           <div className="header-actions">
+            {onOpenSettings && (
+              <Button className="recalc secondary" onClick={onOpenSettings}>
+                <SettingsIcon />
+                Settings
+              </Button>
+            )}
             <Button
               className="recalc secondary"
               disabled={!api?.syncMessagesNow || isSyncing}
@@ -359,7 +413,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
             </Button>
             <Button
               className="recalc"
-              disabled={!selectedConversation || chatBusy}
+              disabled={!selectedConversation || chatBusy || !setupPlan || Boolean(setupPlan.error)}
               onClick={recomputeWithAx}
             >
               <RecalcIcon />
@@ -377,6 +431,14 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
             selectedRunId={run?.id ?? null}
             loading={runLoading}
             error={runError}
+            conversation={selectedConversation}
+            setup={analysisSetup}
+            setupPlan={setupPlan}
+            setupRunning={analysisRunning}
+            onChangeSetup={(patch) =>
+              setAnalysisSetup((current) => ({ ...current, ...patch }))
+            }
+            onRunSetup={createConfiguredAnalysisRun}
             onSelectRun={selectRun}
             onSelectWindow={setSelectedWindowId}
           />
@@ -401,6 +463,91 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
       </div>
     </div>
   )
+}
+
+function buildAnalysisSetupPlan(
+  setup: AnalysisSetupValue,
+  messageCount: number,
+): AnalysisSetupPlan {
+  try {
+    const overlapPercent = clampInteger(setup.overlapPercent, 10, 40)
+    const maxWindows = clampInteger(setup.maxWindows, 1, 200)
+    const config =
+      setup.planner === 'capped'
+        ? planCappedRunWindowConfig(messageCount, { maxWindows, overlapPercent }).config
+        : {
+            mode: 'comparative-message-count' as const,
+            contextMessages: clampInteger(setup.contextMessages, 1, Math.max(1, messageCount)),
+            focalMessages: clampInteger(setup.focalMessages, 1, Math.max(1, messageCount)),
+            stride: Math.max(
+              1,
+              Math.round(
+                clampInteger(setup.focalMessages, 1, Math.max(1, messageCount)) *
+                  (1 - overlapPercent / 100),
+              ),
+            ),
+            minFocalMessages: clampInteger(
+              setup.minFocalMessages,
+              1,
+              Math.max(1, clampInteger(setup.focalMessages, 1, Math.max(1, messageCount))),
+            ),
+          }
+    const windowCount = planRunWindowRanges(messageCount, config).length
+    const error =
+      windowCount > maxWindows
+        ? `Estimated ${windowCount} windows exceeds the ${maxWindows} window cap.`
+        : windowCount === 0
+          ? 'This conversation is too short for the selected context and focal window.'
+          : null
+    return { config, windowCount, error }
+  } catch (error) {
+    return {
+      config: {
+        mode: 'comparative-message-count',
+        contextMessages: 0,
+        focalMessages: 0,
+        stride: 0,
+        minFocalMessages: 0,
+      },
+      windowCount: 0,
+      error: error instanceof Error ? error.message : 'Invalid analysis setup.',
+    }
+  }
+}
+
+function analysisRunOptions(
+  setup: AnalysisSetupValue,
+  plan: AnalysisSetupPlan,
+): AnalysisRunOptions {
+  return {
+    ...plan.config,
+    scorerConfig: {
+      provider: setup.provider,
+      effort: setup.effort,
+      model: setup.model.trim(),
+      promptKey: 'dashboard-configured-ax-v1',
+      label:
+        setup.planner === 'capped'
+          ? `Ax capped ${setup.overlapPercent}% overlap`
+          : `Ax configured ${setup.overlapPercent}% overlap`,
+      overlapPercent: setup.overlapPercent,
+      maxWindows: setup.maxWindows,
+      estimatedWindowCount: plan.windowCount,
+      planner: setup.planner,
+    },
+  }
+}
+
+function clampInteger(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min
+  return Math.min(max, Math.max(min, Math.round(value)))
+}
+
+function conversationMatchesQuery(conversation: ConversationView, query: string): boolean {
+  return [conversation.title, conversation.participantSummary, String(conversation.rawId)]
+    .join(' ')
+    .toLowerCase()
+    .includes(query)
 }
 
 function formatSyncStatus(status: SyncStatus | null): string | null {

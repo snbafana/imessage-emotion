@@ -8,6 +8,7 @@
     "harness:ax:large": "tsx harness_ax.ts --config harness.ax.large.json --out out/harness-ax-large-results.json",
     "harness:ax:conversation": "tsx harness_ax.ts --config harness.ax.conversation.json --out out/harness-ax-conversation-results.json",
     "harness:ax:top5": "tsx harness_ax.ts --config harness.ax.top5.json --out out/harness-ax-top5-results.json",
+    "harness:ax:native-smoke": "tsx harness_ax.ts --config harness.ax.native-smoke.json --out out/native-db-smoke.json --no-provider",
     "graphs:ax": "uv run python plot_ax_results.py --input out/harness-ax-large-results.json --out-dir out/graphs",
     "graphs:top5": "uv run python plot_ax_results.py --input out/harness-ax-top5-results.json --out-dir out/graphs/top5",
     "graph:conversation": "uv run python plot_conversation_heatmap.py --input out/harness-ax-large-results.json --conversation private_c01 --source deterministic --method roberta_emotion --window-size 16 --stride 8 --chart line --out out/graphs/private_c01_emotion_line.png",
@@ -23,7 +24,7 @@
     "llm:providers": "uv run python run_llm_methods.py --private --openai --dspy",
     "agent:trajectory": "uv run python run_llm_methods.py --private --agent-trajectory --agent-private-conversations 2 --agent-windows-per-conversation 6",
     "agent:pivotal": "uv run python run_llm_methods.py --private --pivotal-audit --pivotal-private-conversations 1 --pivotal-candidates-per-conversation 1 --pivotal-max-depth 2",
-    "llm:latency": "uv run python run_llm_methods.py --private --latency-benchmark --latency-private-conversations 2 --latency-windows-per-conversation 4 --latency-models gpt-5-nano,gpt-4.1-nano,gpt-4o-mini,gpt-5-mini --latency-concurrency 1,4",
+    "llm:latency": "uv run python run_llm_methods.py --private --latency-benchmark --latency-private-conversations 2 --latency-windows-per-conversation 4 --latency-models gpt-5-nano,gpt-4.1-nano,gpt-4.1-mini,gpt-5-mini --latency-concurrency 1,4",
     "llm:batch": "uv run python run_llm_methods.py --private --batch-benchmark --batch-private-conversations 4 --batch-windows-per-conversation 4 --batch-models gpt-4.1-nano,gpt-5-nano:minimal --batch-sizes 4,8 --batch-concurrency 2",
     "harness:quick": "uv run python harness.py --config harness.quick.json --out out/harness-quick-results.json",
     "harness:providers": "uv run python harness.py --config harness.provider.json --out out/harness-provider-results.json"

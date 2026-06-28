@@ -1,6 +1,6 @@
 # Emotion Method Experiments
 
-Isolated research harness for the `imessage-emotion` take-home. This folder does not implement app UI or iMessage ingest. It reads private iMessage data at runtime through the local Cued CLI when a private config is used.
+Isolated research harness for the app take-home. This folder does not implement app UI or iMessage ingest. The primary Ax path reads the app-owned native SQLite DB populated by the product sync/import flow; legacy private configs can still read through the local private-message CLI for historical comparison.
 
 ## Current Decision
 
@@ -21,10 +21,11 @@ VADER and other polarity baselines remain only in older survey scripts for compa
 The primary reproducible experiment is [harness_ax.ts](./harness_ax.ts). It:
 
 - loads synthetic or private iMessage conversations,
+- reads native app DB conversations and existing analysis windows/runs when available,
 - scores every rolling window locally with a Transformers.js RoBERTa emotion classifier,
 - computes rolling baseline deltas and top-shift windows,
 - optionally calls Ax structured LLM scorers through OpenAI or OpenRouter,
-- writes generated output under ignored `out/`.
+- writes generated output under ignored `out/` without raw private text by default.
 
 The local RoBERTa model is `nicky48/emotion-english-distilroberta-base-ONNX`, used because it exposes ONNX files compatible with Transformers.js.
 
@@ -46,7 +47,13 @@ Do not commit `.env` or generated `out/` files.
 
 ## Useful Commands
 
-Fast provider smoke over recent private conversations:
+Native app DB packet smoke without provider calls:
+
+```bash
+pnpm run smoke:ax-native-db
+```
+
+Fast provider smoke over recent native app DB conversations:
 
 ```bash
 npm run harness:ax
@@ -81,7 +88,8 @@ npm run graph:conversation:heatmap
 
 ## Configs
 
-- [harness.ax.json](./harness.ax.json): small private provider smoke.
+- [harness.ax.json](./harness.ax.json): small native app DB provider smoke.
+- [harness.ax.native-smoke.json](./harness.ax.native-smoke.json): native app DB packet-building smoke with `--no-provider`.
 - [harness.ax.sweep.json](./harness.ax.sweep.json): window/context/mode sweep.
 - [harness.ax.large.json](./harness.ax.large.json): larger private benchmark and graph source.
 - [harness.ax.conversation.json](./harness.ax.conversation.json): all-window LLM scoring for one conversation.
@@ -89,10 +97,14 @@ npm run graph:conversation:heatmap
 
 Dataset config knobs:
 
+- `kind`: `native`/`app`, `synthetic`, `private`, or `mixed`; prefer `native` for current V1 work.
+- `nativeConversationLimit`: number of app DB conversations to sample.
+- `nativeConversationOrder`: `recent` or `longest`.
+- `minMessagesPerConversation`: minimum imported app DB messages needed for sampling.
 - `privateConversationLimit`: number of private DM conversations.
 - `privateConversationOrder`: `recent` or `longest`.
 - `maxMessagesPerConversation`: chronological message cap per conversation.
-- `includeWindowTextInOutput`: local review mode; keep output ignored and uncommitted.
+- `includeWindowTextInOutput`: local review mode; only takes effect when the CLI also passes `--allow-private-output`. Keep output ignored and uncommitted.
 
 LLM config knobs:
 
@@ -148,3 +160,5 @@ These scripts are not the recommended V1 implementation path.
 ## Privacy
 
 Private messages are authorized for local experiments, but raw private text should stay in ignored local outputs. Provider runs send only the configured bounded windows or context summaries to OpenAI/OpenRouter. Committed results should be aggregate summaries, score distributions, graphs, configs, and scripts only.
+
+Default native DB runs persist only counts, score rows, latency, token estimates, non-identifying summaries, and evidence message refs/ordinals. Use `--no-provider` or `--dry-run` to build prompts/packets and estimate size without sending provider requests. Use `--allow-private-output` only for deliberate local review artifacts.

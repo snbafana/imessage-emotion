@@ -1,4 +1,5 @@
 import type {
+  AnalysisRunOptions as ApiAnalysisRunOptions,
   AnalysisWindow as ApiAnalysisWindow,
   ContactSearchHit as ApiContactSearchHit,
   ConversationSummary as ApiConversationSummary,
@@ -17,7 +18,7 @@ export type DashboardApi = {
   listConversations(): Promise<unknown>
   getConversation(conversationId: number): Promise<unknown>
   listRuns(conversationId: number): Promise<unknown>
-  createBaselineRun(conversationId: number): Promise<unknown>
+  createAnalysisRun(conversationId: number, options?: ApiAnalysisRunOptions): Promise<unknown>
   getRunWindows(runId: number): Promise<unknown>
   getWindowMessages(windowId: number, slice: WindowMessageSlice): Promise<unknown>
   getSyncStatus(): Promise<ApiSyncStatus>
@@ -107,6 +108,10 @@ export type AnalysisWindow = Partial<ApiAnalysisWindow> & {
   context_message_count?: number
   focalMessageCount?: number
   focal_message_count?: number
+  startSentAt?: number | string | null
+  start_sent_at?: number | string | null
+  endSentAt?: number | string | null
+  end_sent_at?: number | string | null
   resultJson?: unknown
   result_json?: unknown
   shiftJson?: unknown
@@ -185,6 +190,8 @@ export type WindowView = {
   contextEndOrdinal: number | null
   focalStartOrdinal: number
   focalEndOrdinal: number
+  startSentAt: number | null
+  endSentAt: number | null
   messageCount: number
   contextMessageCount: number
   focalMessageCount: number
@@ -194,6 +201,8 @@ export type WindowView = {
   dominant: ScoreKey | null
   intensity: number
   summary: string
+  rationale: string | null
+  scoreRationales: Partial<Record<ScoreKey, string>>
   error: string | null
 }
 
@@ -212,15 +221,6 @@ export type TimelineBlock = {
   window: WindowView
   composition: { emotion: EmotionKey; weight: number }[]
   intensity: number
-}
-
-export type DashboardSmokeHtmlInput = {
-  conversations: ConversationView[]
-  run: RunView | null
-  windows: WindowView[]
-  selectedWindow: WindowView | null
-  contextMessages: MessageView[]
-  focalMessages: MessageView[]
 }
 
 type JsonRecord = Record<string, unknown>
@@ -274,7 +274,7 @@ export function normalizeRuns(input: unknown): RunView[] {
       id: String(rawId),
       rawId,
       conversationId: getOptionalId(row, ['conversationId', 'conversation_id']),
-      methodKey: getString(row, ['methodKey', 'method_key']) ?? 'baseline-v1',
+      methodKey: getString(row, ['methodKey', 'method_key']) ?? 'ax-llm-v1',
       status,
       state: normalizeRunState(status),
       scale,
@@ -334,6 +334,8 @@ export function normalizeWindows(input: unknown): WindowView[] {
       contextEndOrdinal,
       focalStartOrdinal,
       focalEndOrdinal,
+      startSentAt: getTime(row, ['startSentAt', 'start_sent_at']),
+      endSentAt: getTime(row, ['endSentAt', 'end_sent_at']),
       messageCount,
       contextMessageCount,
       focalMessageCount,
@@ -343,6 +345,8 @@ export function normalizeWindows(input: unknown): WindowView[] {
       dominant,
       intensity,
       summary: getString(result, ['summary']) ?? getString(shift, ['summary']) ?? 'No result summary yet.',
+      rationale: getString(result, ['rationale']),
+      scoreRationales: extractScoreRationales(result),
       error: getString(row, ['error']) ?? null,
     }
   })
@@ -393,11 +397,11 @@ export function timelineBlocks(windows: WindowView[]): TimelineBlock[] {
 }
 
 export function runStateLabel(run: RunView | null, windows: WindowView[]): string {
-  if (!run) return 'No baseline run yet'
+  if (!run) return 'No analysis run yet'
   if (run.state === 'failed') return 'Run failed'
   if (run.state === 'pending') return 'Run pending'
   if (windows.some((window) => window.state === 'scored') || run.state === 'scored') {
-    return 'Baseline scored'
+    return 'Ax scored'
   }
   return 'Run status unknown'
 }
@@ -426,32 +430,6 @@ export function formatDateRange(first: number | null, last: number | null): stri
   if (first == null) return `through ${formatMonthYear(last)}`
   if (last == null) return `from ${formatMonthYear(first)}`
   return `${formatMonthYear(first)} - ${formatMonthYear(last)}`
-}
-
-export function renderDashboardSmokeHtml(input: DashboardSmokeHtmlInput): string {
-  const selected = input.selectedWindow
-  const status = runStateLabel(input.run, input.windows)
-  const context = input.contextMessages.map((message) => escapeHtml(message.text)).join('')
-  const focal = input.focalMessages.map((message) => escapeHtml(message.text)).join('')
-  const windows = input.windows
-    .map((window) => `<button class="block">${escapeHtml(window.label)} ${escapeHtml(window.status)}</button>`)
-    .join('')
-  const conversations = input.conversations
-    .map((conversation) => `<button class="person">${escapeHtml(conversation.title)}</button>`)
-    .join('')
-
-  return [
-    '<main class="dashboard-smoke">',
-    `<aside>${conversations}</aside>`,
-    `<section class="timeline"><h1>${escapeHtml(status)}</h1>${windows || escapeHtml(status)}</section>`,
-    '<section class="inspector">',
-    `<h2>${escapeHtml(selected?.label ?? status)}</h2>`,
-    `<h3>Old context</h3><div>${context}</div>`,
-    `<h3>New focal</h3><div>${focal}</div>`,
-    `<p>${escapeHtml(selected?.summary ?? status)}</p>`,
-    '</section>',
-    '</main>',
-  ].join('')
 }
 
 function normalizeRunState(status: string | null | undefined): RunState {
@@ -506,6 +484,15 @@ function getDominantScore(result: JsonRecord, scores: Scores): ScoreKey | null {
     if (best == null || (scores[key] ?? 0) > (scores[best] ?? 0)) return key
     return best
   }, null)
+}
+
+function extractScoreRationales(result: JsonRecord): Partial<Record<ScoreKey, string>> {
+  const source = asRecord(result.scoreRationales)
+  return SCORE_KEYS.reduce<Partial<Record<ScoreKey, string>>>((rationales, key) => {
+    const value = getString(source, [key])
+    if (value) rationales[key] = value
+    return rationales
+  }, {})
 }
 
 function isScoreKey(value: string | null): value is ScoreKey {
@@ -669,13 +656,4 @@ function colorForId(id: string): string {
     'oklch(0.63 0.2 27)',
   ]
   return palette[hash % palette.length]
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
