@@ -23,11 +23,11 @@ import {
   type RunView,
   type WindowView,
 } from './data'
-import { RecalcIcon } from './icons'
+import { RecalcIcon, SettingsIcon } from './icons'
 import type { SyncStatus } from '../lib/api/types'
 import './dashboard.css'
 
-export default function Dashboard() {
+export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => void }) {
   const api = useMemo(() => getDashboardApi(), [])
   const [conversations, setConversations] = useState<ConversationView[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -322,6 +322,12 @@ export default function Dashboard() {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
+      {onOpenSettings ? (
+        <Button className="settings-toggle" onClick={onOpenSettings}>
+          <SettingsIcon />
+          Settings
+        </Button>
+      ) : null}
 
       <div className="main">
         <header className="header-bar">

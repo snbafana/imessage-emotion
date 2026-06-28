@@ -39,7 +39,7 @@ describe('contacts reader', () => {
 
   it('resolves an explicit native helper path', () => {
     const dir = mkdtempSync(join(tmpdir(), 'imessage-emotion-helper-'))
-    const helperPath = join(dir, 'cued-native-helper')
+    const helperPath = join(dir, 'imessage-emotion-native-helper')
     writeFileSync(helperPath, '#!/bin/sh\nexit 0\n')
     chmodSync(helperPath, 0o755)
 
@@ -50,7 +50,7 @@ describe('contacts reader', () => {
 
   it('loads contacts through the native helper contract', () => {
     const dir = mkdtempSync(join(tmpdir(), 'imessage-emotion-helper-'))
-    const helperPath = join(dir, 'cued-native-helper')
+    const helperPath = join(dir, 'imessage-emotion-native-helper')
     writeFileSync(
       helperPath,
       [

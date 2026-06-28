@@ -1,19 +1,37 @@
-export const API_CHANNELS = {
-  getSyncStatus: 'imessage-emotion:get-sync-status',
-  syncMessagesNow: 'imessage-emotion:sync-messages-now',
-  syncContactsNow: 'imessage-emotion:sync-contacts-now',
-  listConversations: 'imessage-emotion:list-conversations',
-  getConversation: 'imessage-emotion:get-conversation',
-  createBaselineRun: 'imessage-emotion:create-baseline-run',
-  listRuns: 'imessage-emotion:list-runs',
-  getRunWindows: 'imessage-emotion:get-run-windows',
-  getWindowMessages: 'imessage-emotion:get-window-messages',
-  askConversation: 'imessage-emotion:ask-conversation',
-} as const
-
-export type ApiMethodName = keyof typeof API_CHANNELS
 export type JsonRecord = Record<string, unknown>
 export type SyncPhase = 'idle' | 'syncing' | 'error' | 'stopped'
+
+export type SetupReadinessState =
+  | 'authorized'
+  | 'missing'
+  | 'needs_full_disk_access'
+  | 'blocked'
+  | 'not_determined'
+  | 'denied'
+  | 'restricted'
+  | 'limited'
+  | 'unknown'
+  | 'check_failed'
+
+export interface SetupPermissionStatus {
+  key: 'messages_full_disk_access' | 'contacts'
+  label: string
+  state: SetupReadinessState
+  canSync: boolean
+  summary: string
+  actionLabel: string
+  settingsTarget: 'full_disk_access' | 'contacts'
+  error?: string
+}
+
+export interface PrivacySafeCounts {
+  conversations: number
+  messages: number
+  contacts: number
+  resolvedContacts: number
+  lastMessageAt: number | null
+  lastImportedAt: number | null
+}
 
 export interface SyncStatus {
   messages: {
@@ -29,6 +47,13 @@ export interface SyncStatus {
     resolvedHandles: number
     error?: string
   }
+}
+
+export interface OnboardingStatus {
+  permissions: SetupPermissionStatus[]
+  sync: SyncStatus
+  counts: PrivacySafeCounts
+  ready: boolean
 }
 
 export interface ConversationSummary {
@@ -258,16 +283,3 @@ export interface AskConversationInput {
 }
 
 export type ConversationChatResponse = import('../chat/answer').ConversationChatResponse
-
-export interface ImessageEmotionApi {
-  getSyncStatus(): Promise<SyncStatus>
-  syncMessagesNow(): Promise<SyncStatus>
-  syncContactsNow(): Promise<SyncStatus>
-  listConversations(): Promise<ConversationSummary[]>
-  getConversation(conversationId: number): Promise<ConversationDetail | null>
-  createBaselineRun(conversationId: number, options?: BaselineRunOptions): Promise<RunSummary>
-  listRuns(conversationId: number): Promise<RunSummary[]>
-  getRunWindows(runId: number): Promise<AnalysisWindow[]>
-  getWindowMessages(windowId: number, slice?: WindowMessageSlice): Promise<WindowMessage[]>
-  askConversation(input: AskConversationInput): Promise<ConversationChatResponse>
-}

@@ -10,7 +10,10 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "smoke:onboarding-status": "node --loader ./scripts/ts-strip-loader.mjs scripts/smoke-onboarding-status.mjs",
+    "smoke:local-app-db": "node --loader ./scripts/ts-strip-loader.mjs scripts/smoke-local-app-db.mjs",
+    "smoke:privacy": "node scripts/smoke-privacy-guard.mjs"
   },
   "dependencies": {
     "@ax-llm/ax": "^22.0.7",

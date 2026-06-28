@@ -36,9 +36,23 @@ export const ChevronIcon = ({ size = 13, color = '#9a9aa0' }: P) => (
   </svg>
 )
 
+export const ArrowLeftIcon = ({ size = 14, color = '#0a0a0b' }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.2}>
+    <path d="M19 12H5" />
+    <path d="M12 19l-7-7 7-7" />
+  </svg>
+)
+
 export const SendIcon = ({ size = 17, color = '#fff' }: P) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.2}>
     <line x1="12" y1="19" x2="12" y2="5" />
     <path d="M5 12l7-7 7 7" />
+  </svg>
+)
+
+export const SettingsIcon = ({ size = 14, color = '#6b6b70' }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.1}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M19.4 15a8 8 0 0 0 .1-1l2-1.5-2-3.5-2.4 1a7.6 7.6 0 0 0-1.7-1L15 6.4h-4L10.6 9a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.5 2 1.5a8 8 0 0 0 .1 1l-2 1.5 2 3.5 2.4-1a7.6 7.6 0 0 0 1.7 1l.4 2.6h4l.4-2.6a7.6 7.6 0 0 0 1.7-1l2.4 1 2-3.5Z" />
   </svg>
 )

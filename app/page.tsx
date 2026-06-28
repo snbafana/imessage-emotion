@@ -1,5 +1,5 @@
-import Dashboard from '@/dashboard/Dashboard'
+import AppView from '@/dashboard/AppView'
 
 export default function Page() {
-  return <Dashboard />
+  return <AppView />
 }

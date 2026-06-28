@@ -2,6 +2,15 @@ import Database from 'better-sqlite3'
 
 export type AppDatabase = Database.Database
 
+export interface PrivacySafeCounts {
+  conversations: number
+  messages: number
+  contacts: number
+  resolvedContacts: number
+  lastMessageAt: number | null
+  lastImportedAt: number | null
+}
+
 export function openAppDatabase(path: string): AppDatabase {
   const db = new Database(path)
   db.pragma('journal_mode = WAL')
@@ -212,4 +221,40 @@ function tableExists(db: AppDatabase, tableName: string): boolean {
 function tableHasColumn(db: AppDatabase, tableName: string, columnName: string): boolean {
   const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
   return columns.some((column) => column.name === columnName)
+}
+
+function numberValue(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
+export function getPrivacySafeCounts(db: AppDatabase): PrivacySafeCounts {
+  const row = db
+    .prepare(
+      `
+      SELECT
+        (SELECT COUNT(*) FROM conversations) AS conversations,
+        (SELECT COUNT(*) FROM messages) AS messages,
+        (SELECT COUNT(*) FROM contacts) AS contacts,
+        (SELECT COUNT(*) FROM contacts WHERE resolved_at IS NOT NULL) AS resolved_contacts,
+        (SELECT MAX(sent_at) FROM messages) AS last_message_at,
+        (SELECT MAX(last_imported_at) FROM import_state) AS last_imported_at
+    `,
+    )
+    .get() as {
+    conversations: number
+    messages: number
+    contacts: number
+    resolved_contacts: number
+    last_message_at: number | null
+    last_imported_at: number | null
+  }
+
+  return {
+    conversations: numberValue(row.conversations),
+    messages: numberValue(row.messages),
+    contacts: numberValue(row.contacts),
+    resolvedContacts: numberValue(row.resolved_contacts),
+    lastMessageAt: row.last_message_at,
+    lastImportedAt: row.last_imported_at,
+  }
 }

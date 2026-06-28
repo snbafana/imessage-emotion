@@ -2,6 +2,7 @@ import type {
   AnalysisWindow as ApiAnalysisWindow,
   ContactSearchHit as ApiContactSearchHit,
   ConversationSummary as ApiConversationSummary,
+  OnboardingStatus,
   RunSummary as ApiRunSummary,
   SyncStatus as ApiSyncStatus,
   WindowMessage as ApiWindowMessage,
@@ -12,6 +13,7 @@ import { ANCHOR_DISPLAY, EKMAN_ANCHORS, type Anchor } from '../lib/emotion/ancho
 // typed tRPC client). Results flow into the permissive normalizers below, so the
 // methods are widened to `unknown` at this boundary.
 export type DashboardApi = {
+  getOnboardingStatus(): Promise<OnboardingStatus>
   listConversations(): Promise<unknown>
   getConversation(conversationId: number): Promise<unknown>
   listRuns(conversationId: number): Promise<unknown>
@@ -19,9 +21,12 @@ export type DashboardApi = {
   getRunWindows(runId: number): Promise<unknown>
   getWindowMessages(windowId: number, slice: WindowMessageSlice): Promise<unknown>
   getSyncStatus(): Promise<ApiSyncStatus>
+  syncLocalDataNow(): Promise<OnboardingStatus>
   syncMessagesNow(): Promise<ApiSyncStatus>
   syncContactsNow(): Promise<ApiSyncStatus>
   searchContacts(query: string): Promise<ApiContactSearchHit[]>
+  openFullDiskAccessSettings(): Promise<unknown>
+  openContactsSettings(): Promise<unknown>
 }
 
 // Canonical Ekman-7 anchors, shared with the scorer + eve agent.

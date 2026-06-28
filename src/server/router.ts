@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { z } from 'zod'
 import { publicProcedure, router } from './trpc'
 import { getDb } from '@/lib/db/connection'
@@ -8,8 +10,13 @@ import { getWindowMessages } from '@/lib/api/messages'
 import { createBaselineRun } from '@/lib/emotion/run-baseline'
 import { answerConversation } from '@/lib/chat/answer'
 import { getServerSyncEngine } from '@/lib/sync/server-sync'
+import { DEFAULT_CHAT_DB_PATH } from '@/lib/imessage/reader'
+import { buildOnboardingStatus } from '@/lib/onboarding/status'
 
 const sliceInput = z.enum(['all', 'full', 'context', 'focal'])
+const execFileAsync = promisify(execFile)
+const FULL_DISK_ACCESS_SETTINGS = 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'
+const CONTACTS_SETTINGS = 'x-apple.systempreferences:com.apple.preference.security?Privacy_Contacts'
 
 const baselineOptions = z
   .object({
@@ -29,7 +36,21 @@ const askInput = z.object({
   windowId: z.number(),
 })
 
+async function openSettings(target: string): Promise<{ opened: boolean }> {
+  if (process.platform !== 'darwin') return { opened: false }
+  await execFileAsync('open', [target])
+  return { opened: true }
+}
+
 export const appRouter = router({
+  onboardingStatus: publicProcedure.query(() =>
+    buildOnboardingStatus(
+      getDb(),
+      getServerSyncEngine(getDb()).getStatus(),
+      { chatDbPath: process.env.IMESSAGE_CHAT_DB_PATH ?? DEFAULT_CHAT_DB_PATH },
+    ),
+  ),
+
   listConversations: publicProcedure.query(() => listConversations(getDb())),
 
   getConversation: publicProcedure
@@ -67,6 +88,22 @@ export const appRouter = router({
   syncMessages: publicProcedure.mutation(() => getServerSyncEngine(getDb()).syncMessages()),
 
   syncContacts: publicProcedure.mutation(() => getServerSyncEngine(getDb()).syncContacts()),
+
+  syncLocalData: publicProcedure.mutation(async () => {
+    const db = getDb()
+    const engine = getServerSyncEngine(db)
+    await engine.syncMessages()
+    await engine.syncContacts()
+    return buildOnboardingStatus(
+      db,
+      engine.getStatus(),
+      { chatDbPath: process.env.IMESSAGE_CHAT_DB_PATH ?? DEFAULT_CHAT_DB_PATH },
+    )
+  }),
+
+  openFullDiskAccessSettings: publicProcedure.mutation(() => openSettings(FULL_DISK_ACCESS_SETTINGS)),
+
+  openContactsSettings: publicProcedure.mutation(() => openSettings(CONTACTS_SETTINGS)),
 })
 
 export type AppRouter = typeof appRouter
