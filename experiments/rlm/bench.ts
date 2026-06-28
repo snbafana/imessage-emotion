@@ -6,7 +6,7 @@ import { getWindowMessages } from '../../src/lib/api/messages'
 import { EKMAN_ANCHORS, type AnchorScores } from '../../src/lib/emotion/anchors'
 import { clamp, dominantOf, gatewayService } from '../../src/lib/emotion/ax-shared'
 import { triageRunWithRoberta } from '../../src/lib/emotion/roberta-triage'
-import { scoreRunWithRlm } from '../../src/lib/emotion/rlm-scorer'
+import { scoreRunWithRlm } from './rlm-scorer'
 import { scoreRunTwoTier } from '../../src/lib/emotion/two-tier-scorer'
 
 // Head-to-head speed test of every scoring path on identically-sized runs.

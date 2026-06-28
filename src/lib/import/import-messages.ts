@@ -136,7 +136,7 @@ function insertMessage(db: AppDatabase, message: IMessageMessage, conversationId
   return result.changes > 0
 }
 
-export function recomputeConversationOrdinals(db: AppDatabase, conversationId: number): void {
+function recomputeConversationOrdinals(db: AppDatabase, conversationId: number): void {
   const rows = db
     .prepare(
       `

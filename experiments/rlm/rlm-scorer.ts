@@ -1,9 +1,9 @@
 import { agent, AxJSRuntime, f, fn } from '@ax-llm/ax'
-import type { AppDatabase } from '../db/schema'
-import { getRunWindows } from '../api/runs'
-import { getWindowMessages } from '../api/messages'
-import { EKMAN_ANCHORS, type Anchor, type AnchorScores } from './anchors'
-import { clamp, dominantOf, lenientParse, scorerService } from './ax-shared'
+import type { AppDatabase } from '../../src/lib/db/schema'
+import { getRunWindows } from '../../src/lib/api/runs'
+import { getWindowMessages } from '../../src/lib/api/messages'
+import { EKMAN_ANCHORS, type Anchor, type AnchorScores } from '../../src/lib/emotion/anchors'
+import { clamp, dominantOf, lenientParse, scorerService } from '../../src/lib/emotion/ax-shared'
 
 // RLM scorer: instead of the host orchestrating one tool call per window (which
 // caps out when the model has to emit hundreds of calls in a turn), a single ax
