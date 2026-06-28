@@ -1,4 +1,5 @@
 import { Button } from '@base-ui/react/button'
+import type { ReactNode } from 'react'
 import type { EmotionKey, RunView, WindowView } from './data'
 import { EMOTIONS, SCORE_KEYS, gradientFor, runStateLabel, timelineBlocks } from './data'
 
@@ -69,6 +70,21 @@ function runMeta(run: RunView): string {
   return `${scored}/${total} windows`
 }
 
+function runOptionLabel(run: RunView): string {
+  return `${run.scaleLabel} · ${run.configLabel} · ${runMeta(run)}`
+}
+
+function formatWindowDate(window: WindowView | undefined): string {
+  const value = window?.startSentAt ?? window?.endSentAt ?? null
+  if (value == null) return window ? `${window.startOrdinal}` : ''
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(value)
+}
+
 export default function EmotionTimeline({
   run,
   runs,
@@ -79,6 +95,9 @@ export default function EmotionTimeline({
   error,
   onSelectRun,
   onSelectWindow,
+  actions,
+  statusLine,
+  statusTone = 'neutral',
 }: {
   run: RunView | null
   runs: RunView[]
@@ -89,6 +108,9 @@ export default function EmotionTimeline({
   error: string | null
   onSelectRun: (id: string) => void
   onSelectWindow: (id: string) => void
+  actions?: ReactNode
+  statusLine?: string | null
+  statusTone?: 'neutral' | 'error'
 }) {
   const stateLabel = runStateLabel(run, windows)
   const blocks = timelineBlocks(windows)
@@ -100,33 +122,30 @@ export default function EmotionTimeline({
   return (
     <section className="timeline-panel">
       <div className="panel-head">
-        <div className="heading">
-          <div className="title-row">
-            <h1>{run ? 'Emotion graph' : stateLabel}</h1>
-            {run && (
-              <span className={`trend-note status-${run.state}`}>
-                {run.scaleLabel} · {run.configLabel} · {runMeta(run)}
-              </span>
-            )}
-          </div>
-        </div>
-        {runs.length > 1 && (
-          <div className="run-switcher" aria-label="Baseline runs">
-            {runs.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`run-tab scale-${item.scale}`}
-                aria-pressed={item.id === selectedRunId}
-                data-selected={item.id === selectedRunId ? '' : undefined}
-                onClick={() => onSelectRun(item.id)}
+        <div className="timeline-tools">
+          {runs.length > 0 && (
+            <label className="run-select-wrap">
+              <span>Run</span>
+              <select
+                className="run-select"
+                value={selectedRunId ?? ''}
+                onChange={(event) => onSelectRun(event.target.value)}
               >
-                <span className="run-kind">{item.scaleLabel}</span>
-                <span className="run-count">{runMeta(item)}</span>
-              </button>
-            ))}
-          </div>
-        )}
+                {runs.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {runOptionLabel(item)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {(actions || statusLine) && (
+            <div className="timeline-actions">
+              {statusLine && <span className={`timeline-status ${statusTone}`}>{statusLine}</span>}
+              {actions}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="chart">
@@ -217,9 +236,9 @@ export default function EmotionTimeline({
             </div>
 
             <div className="axis">
-              <span>{windows[0]?.startOrdinal}</span>
-              <span>{windows[Math.floor(windows.length / 2)]?.startOrdinal}</span>
-              <span>{windows[windows.length - 1]?.endOrdinal}</span>
+              <span>{formatWindowDate(windows[0])}</span>
+              <span>{formatWindowDate(windows[Math.floor(windows.length / 2)])}</span>
+              <span>{formatWindowDate(windows[windows.length - 1])}</span>
             </div>
           </>
         )}

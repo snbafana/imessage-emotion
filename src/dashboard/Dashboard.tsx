@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEveAgent } from 'eve/react'
-import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
 import EmotionTimeline from './EmotionTimeline'
 import ChatPanel from './ChatPanel'
@@ -10,7 +9,6 @@ import Inspector from './Inspector'
 import Sidebar from './Sidebar'
 import { getDashboardApi } from './api'
 import {
-  formatDateRange,
   formatMessageCount,
   getWindowMessages,
   hasConversationApi,
@@ -51,14 +49,19 @@ export default function Dashboard() {
   // whose participants matched the contacts FTS query.
   const [matchedConversationIds, setMatchedConversationIds] = useState<Set<string> | null>(null)
 
+  const orderedConversations = useMemo(
+    () => moveConversationToTop(conversations, activeId),
+    [conversations, activeId],
+  )
+
   const visibleConversations = useMemo(
     () =>
       matchedConversationIds === null
-        ? conversations
-        : conversations.filter((conversation) =>
+        ? orderedConversations
+        : orderedConversations.filter((conversation) =>
             matchedConversationIds.has(String(conversation.rawId)),
           ),
-    [conversations, matchedConversationIds],
+    [orderedConversations, matchedConversationIds],
   )
 
   const chat = useEveAgent()
@@ -324,44 +327,6 @@ export default function Dashboard() {
       />
 
       <div className="main">
-        <header className="header-bar">
-          <Avatar.Root
-            className="avatar"
-            style={{ background: selectedConversation?.avatar ?? '#1f44ff' }}
-          >
-            <Avatar.Fallback>{selectedConversation?.initial ?? '?'}</Avatar.Fallback>
-          </Avatar.Root>
-          <div className="id">
-            <span className="name">{selectedConversation?.title ?? 'No conversation selected'}</span>
-            <span className="range">
-              {selectedConversation
-                ? `${formatDateRange(selectedConversation.firstMessageAt, selectedConversation.lastMessageAt)} · ${formatMessageCount(selectedConversation.messageCount)} messages · ${selectedConversation.participantSummary}`
-                : 'Sync messages to populate the dashboard'}
-            </span>
-            {syncStatusLine && (
-              <span className={`action-status${syncError ? ' error' : ''}`}>{syncStatusLine}</span>
-            )}
-          </div>
-          <div className="header-actions">
-            <Button
-              className="recalc secondary"
-              disabled={!api?.syncMessagesNow || isSyncing}
-              onClick={syncMessages}
-            >
-              <RecalcIcon />
-              {isSyncing ? 'Syncing...' : 'Sync Data'}
-            </Button>
-            <Button
-              className="recalc"
-              disabled={!selectedConversation || chatBusy}
-              onClick={recomputeWithAx}
-            >
-              <RecalcIcon />
-              {chatBusy ? 'Recomputing…' : 'Recompute (ax)'}
-            </Button>
-          </div>
-        </header>
-
         <div className="body">
           <EmotionTimeline
             run={run}
@@ -373,6 +338,31 @@ export default function Dashboard() {
             error={runError}
             onSelectRun={selectRun}
             onSelectWindow={setSelectedWindowId}
+            actions={
+              <>
+                <a className="recalc secondary" href="/labeling">
+                  Label windows
+                </a>
+                <Button
+                  className="recalc secondary"
+                  disabled={!api?.syncMessagesNow || isSyncing}
+                  onClick={syncMessages}
+                >
+                  <RecalcIcon />
+                  {isSyncing ? 'Syncing...' : 'Sync Data'}
+                </Button>
+                <Button
+                  className="recalc"
+                  disabled={!selectedConversation || chatBusy}
+                  onClick={recomputeWithAx}
+                >
+                  <RecalcIcon />
+                  {chatBusy ? 'Recomputing...' : 'Recompute'}
+                </Button>
+              </>
+            }
+            statusLine={syncStatusLine}
+            statusTone={syncError ? 'error' : 'neutral'}
           />
           <div className="lower-row">
             <Inspector
@@ -395,6 +385,19 @@ export default function Dashboard() {
       </div>
     </div>
   )
+}
+
+function moveConversationToTop(
+  conversations: ConversationView[],
+  activeId: string | null,
+): ConversationView[] {
+  if (!activeId) return conversations
+  const activeIndex = conversations.findIndex((conversation) => conversation.id === activeId)
+  if (activeIndex <= 0) return conversations
+  const next = [...conversations]
+  const [active] = next.splice(activeIndex, 1)
+  next.unshift(active)
+  return next
 }
 
 function formatSyncStatus(status: SyncStatus | null): string | null {

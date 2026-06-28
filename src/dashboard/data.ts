@@ -102,6 +102,10 @@ export type AnalysisWindow = Partial<ApiAnalysisWindow> & {
   context_message_count?: number
   focalMessageCount?: number
   focal_message_count?: number
+  startSentAt?: number | string | null
+  start_sent_at?: number | string | null
+  endSentAt?: number | string | null
+  end_sent_at?: number | string | null
   resultJson?: unknown
   result_json?: unknown
   shiftJson?: unknown
@@ -180,6 +184,8 @@ export type WindowView = {
   contextEndOrdinal: number | null
   focalStartOrdinal: number
   focalEndOrdinal: number
+  startSentAt: number | null
+  endSentAt: number | null
   messageCount: number
   contextMessageCount: number
   focalMessageCount: number
@@ -329,6 +335,8 @@ export function normalizeWindows(input: unknown): WindowView[] {
       contextEndOrdinal,
       focalStartOrdinal,
       focalEndOrdinal,
+      startSentAt: getTime(row, ['startSentAt', 'start_sent_at']),
+      endSentAt: getTime(row, ['endSentAt', 'end_sent_at']),
       messageCount,
       contextMessageCount,
       focalMessageCount,

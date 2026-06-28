@@ -8,7 +8,7 @@ import type {
   UseEveAgentHelpers,
 } from 'eve/react'
 import type { HandleMessageStreamEvent } from 'eve/client'
-import { SendIcon, SparkleIcon } from './icons'
+import { SendIcon } from './icons'
 
 type ChatPanelProps = {
   agent: UseEveAgentHelpers<EveMessageData>
@@ -166,7 +166,6 @@ export default function ChatPanel({ agent, conversationId, runId, windowId = nul
   return (
     <section className="panel chat-panel">
       <div className="chat-head">
-        <SparkleIcon />
         <span className="t">Ask the timeline</span>
         <span className="eve-badge">eve agent{busy ? ' · thinking' : ''}</span>
       </div>
@@ -190,10 +189,6 @@ export default function ChatPanel({ agent, conversationId, runId, windowId = nul
       </div>
 
       <div className="chat-body">
-        {agent.data.messages.length === 0 && (
-          <div className="chat-empty">Ask why a shift happened — eve reads the messages in scope and cites them.</div>
-        )}
-
         {agent.data.messages.map((message, mi) =>
           message.role === 'user' ? (
             <div key={mi} className="turn user">
