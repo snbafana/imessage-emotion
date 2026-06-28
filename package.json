@@ -12,7 +12,8 @@
     "test": "vitest run",
     "smoke:api-contract": "node scripts/smoke-api-contract.mjs",
     "smoke:backend-read-api": "node scripts/smoke-backend-read-api.mjs",
-    "smoke:shift-summary": "tsx scripts/smoke-shift-summary.mjs"
+    "smoke:shift-summary": "tsx scripts/smoke-shift-summary.mjs",
+    "smoke:chat": "node scripts/smoke-chat-retrieval.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

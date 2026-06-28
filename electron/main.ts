@@ -5,6 +5,8 @@ import { openAppDatabase, type AppDatabase } from '../src/lib/db/schema'
 import { getConversation, listConversations } from '../src/lib/api/conversations'
 import { getWindowMessages } from '../src/lib/api/messages'
 import { getRunWindows, listRuns } from '../src/lib/api/runs'
+import { answerConversation } from '../src/lib/chat/answer'
+import type { AskConversationInput, ConversationChatResponse } from '../src/lib/api/types'
 import type { WindowMessageSlice } from '../src/lib/api/types'
 import {
   API_CHANNELS,
@@ -70,10 +72,6 @@ function getSyncStatus(): SyncStatus {
     messages: lastSyncStatus,
     contacts: lastContactsStatus,
   }
-}
-
-function contractStub(method: string): never {
-  throw new Error(`${method} is not implemented yet`)
 }
 
 function getDatabase(): AppDatabase {
@@ -229,7 +227,16 @@ ipcMain.handle(
   (_event, windowId: number, slice: WindowMessageSlice = 'all') =>
     getWindowMessages(requireDatabase(), windowId, slice),
 )
-ipcMain.handle(API_CHANNELS.askConversation, () => contractStub('askConversation'))
+ipcMain.handle(
+  API_CHANNELS.askConversation,
+  (_event, input: AskConversationInput): ConversationChatResponse =>
+    answerConversation(requireDatabase(), {
+      conversationId: input.conversationId,
+      runId: input.runId,
+      windowId: input.windowId,
+      question: input.question,
+    }),
+)
 
 app.whenReady().then(() => {
   startAppServices()

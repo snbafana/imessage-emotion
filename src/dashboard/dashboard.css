@@ -616,6 +616,7 @@
   font-size: 13px;
   line-height: 20px;
   color: #1a1a1e;
+  white-space: pre-line;
 }
 .citation {
   display: inline-flex;
@@ -635,6 +636,9 @@
   font-family: var(--mono);
   font-size: 10px;
 }
+.citation .dot {
+  background: var(--cobalt);
+}
 
 .input-bar {
   display: flex;
@@ -646,25 +650,45 @@
 }
 .input-bar .field {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  gap: 8px;
   flex: 1;
-  height: 40px;
-  padding: 0 14px;
+  min-height: 46px;
+  padding: 9px 12px;
   background: var(--fill);
   border: 1px solid var(--hair);
   border-radius: 10px;
 }
-.input-bar .field input {
+.input-bar .field textarea {
+  display: block;
   border: 0;
   outline: none;
+  resize: none;
   background: transparent;
   font: inherit;
   font-size: 13px;
+  line-height: 18px;
   width: 100%;
+  min-height: 36px;
+  max-height: 90px;
   color: var(--ink);
 }
-.input-bar .field input::placeholder {
+.input-bar .field textarea::placeholder {
   color: var(--faint);
+}
+.input-bar .field textarea:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+.char-count {
+  flex-shrink: 0;
+  padding-bottom: 2px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--faint);
+}
+.char-count.over {
+  color: oklch(0.52 0.2 27);
 }
 .send {
   display: flex;
@@ -677,4 +701,17 @@
   border: 0;
   border-radius: 10px;
   cursor: pointer;
+}
+.send:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.turn.user[data-status='submitted'] {
+  opacity: 0.82;
+}
+.turn.agent[data-status='error'] .text {
+  color: oklch(0.52 0.2 27);
+}
+.turn.pending .text {
+  color: var(--muted);
 }
