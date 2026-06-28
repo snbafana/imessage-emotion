@@ -10,6 +10,7 @@ import ChatPanel from './ChatPanel'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
 import TwoTierRoom from './TwoTierRoom'
+import ControlRoom from './ControlRoom'
 import { getDashboardApi } from './api'
 import {
   formatDateRange,
@@ -68,6 +69,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
   const [showTwoTier, setShowTwoTier] = useState(false)
   // Recompute opens a settings popup first instead of running immediately.
   const [showRecalcSetup, setShowRecalcSetup] = useState(false)
+  const [showControlRoom, setShowControlRoom] = useState(false)
   // null = no active search (show everything); a Set = the conversation ids
   // whose participants matched the contacts FTS query.
   const [matchedConversationIds, setMatchedConversationIds] = useState<Set<string> | null>(null)
@@ -362,6 +364,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
 
     setAnalysisRunning(true)
     setRunError(null)
+    setShowControlRoom(true)
     setActionStatus(`Scoring windows with ${analysisSetup.model}...`)
     try {
       const options = analysisRunOptions(analysisSetup, setupPlan)
@@ -501,6 +504,13 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
               RoBERTa → RLM
             </Button>
             <Button
+              className="recalc secondary"
+              disabled={!selectedConversation || showControlRoom}
+              onClick={() => setShowControlRoom(true)}
+            >
+              Control room
+            </Button>
+            <Button
               className="recalc"
               disabled={!selectedConversation || analysisRunning}
               onClick={() => setShowRecalcSetup(true)}
@@ -589,6 +599,16 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
           onDone={() => {
             void reloadRun(selectedConversation)
           }}
+        />
+      )}
+
+      {showControlRoom && (
+        <ControlRoom
+          api={api}
+          windows={windows}
+          title={selectedConversation?.title}
+          busy={analysisRunning}
+          onClose={() => setShowControlRoom(false)}
         />
       )}
     </div>
