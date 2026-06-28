@@ -1,5 +1,6 @@
 import { Button } from '@base-ui/react/button'
 import { Select } from '@base-ui/react/select'
+import type { MouseEvent } from 'react'
 import type { ComparativeRunWindowConfig } from '../lib/windows/windows'
 import type { ConversationView, EmotionKey, RunView, WindowView } from './data'
 import { EMOTIONS, SCORE_KEYS, formatMessageCount, gradientFor, runStateLabel, timelineBlocks } from './data'
@@ -173,6 +174,19 @@ export default function EmotionTimeline({
   const selectedIndex = windows.findIndex((window) => window.id === selectedId)
   const markerX = selectedX(selectedIndex, windows.length)
 
+  // Clicking anywhere in the plot selects the window nearest to the click on the
+  // x axis. This keeps windows reachable even when there are too many to render
+  // individual clickable blocks (see BLOCK_RENDER_WINDOW_LIMIT).
+  const handlePlotClick = (event: MouseEvent<HTMLDivElement>) => {
+    if (windows.length === 0) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    if (rect.width === 0) return
+    const fraction = clamp01((event.clientX - rect.left) / rect.width)
+    const index = Math.round(fraction * (windows.length - 1))
+    const target = windows[index]
+    if (target) onSelectWindow(target.id)
+  }
+
   return (
     <section className="timeline-panel">
       <div className="panel-head">
@@ -233,7 +247,12 @@ export default function EmotionTimeline({
           <TimelineState label="Waiting for first scored Ax window..." />
         ) : (
           <>
-            <div className="plot">
+            <div
+              className="plot interactive"
+              role="presentation"
+              onClick={handlePlotClick}
+              title="Click the graph to select the nearest window"
+            >
               <div className="gridline" style={{ top: 0 }} />
               <div className="gridline" style={{ top: 70 }} />
               <div className="gridline" style={{ top: 140 }} />
@@ -255,7 +274,10 @@ export default function EmotionTimeline({
                             ? '#d9d9dd'
                             : gradientFor(block.composition),
                       }}
-                      onClick={() => onSelectWindow(block.window.id)}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onSelectWindow(block.window.id)
+                      }}
                       title={`${block.window.label} · ${dominant ? EMOTIONS[dominant].label : 'no score yet'}`}
                       aria-label={`${block.window.label}, ${dominant ? EMOTIONS[dominant].label : 'no score yet'}`}
                     >
@@ -286,6 +308,19 @@ export default function EmotionTimeline({
                         vectorEffect="non-scaling-stroke"
                       />
                     ))}
+                    {markerX >= 0 && (
+                      <line
+                        x1={markerX}
+                        y1={PLOT_TOP}
+                        x2={markerX}
+                        y2={PLOT_BOTTOM}
+                        stroke="#1f44ff"
+                        strokeWidth={1.5}
+                        strokeDasharray="3 4"
+                        opacity={0.7}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    )}
                     {markerX >= 0 &&
                       series.map((item) => (
                         <circle
@@ -331,7 +366,7 @@ function TimelineState({ label, tone = 'neutral' }: { label: string; tone?: 'neu
   return <div className={`timeline-state ${tone}`}>{label}</div>
 }
 
-function AnalysisSetupPanel({
+export function AnalysisSetupPanel({
   conversation,
   setup,
   plan,

@@ -125,6 +125,18 @@
   overflow-y: auto;
   padding-right: 2px;
 }
+.people-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.people-group + .people-group {
+  margin-top: 16px;
+}
+.people-group-label {
+  padding: 0 8px 6px;
+}
+
 .person {
   display: flex;
   align-items: center;
@@ -827,6 +839,9 @@
     linear-gradient(to top, color-mix(in oklch, var(--fill) 58%, transparent), transparent 34%),
     #fff;
 }
+.plot.interactive {
+  cursor: pointer;
+}
 .timeline-state {
   display: flex;
   align-items: center;
@@ -1341,6 +1356,41 @@
   background: rgba(10, 10, 11, 0.34);
   backdrop-filter: blur(5px);
   cursor: zoom-out;
+}
+.recalc-modal {
+  position: fixed;
+  z-index: 61;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100vw - 48px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.recalc-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+.recalc-modal-close {
+  border: 0;
+  border-radius: 6px;
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+.recalc-modal-close:hover {
+  background: rgba(255, 255, 255, 0.28);
 }
 .chat-head {
   display: flex;
