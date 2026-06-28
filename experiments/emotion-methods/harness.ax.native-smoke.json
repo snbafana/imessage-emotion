@@ -1,0 +1,30 @@
+{
+  "runName": "ax-native-db-packet-smoke",
+  "dataset": {
+    "kind": "native",
+    "nativeConversationLimit": 2,
+    "nativeConversationOrder": "recent",
+    "minMessagesPerConversation": 12,
+    "maxMessagesPerConversation": 160
+  },
+  "windowing": [
+    { "size": 8, "stride": 8 }
+  ],
+  "selection": {
+    "strategy": "top_shift",
+    "maxWindowsPerConversation": 2,
+    "candidateScorer": "emoji_keyword_features"
+  },
+  "deterministic": [],
+  "llm": [
+    {
+      "name": "ax_native_packet_builder",
+      "provider": "openai",
+      "model": "gpt-4.1-nano",
+      "contextMode": "prior_summary",
+      "concurrency": 1,
+      "maxWindows": 4,
+      "maxTokens": 350
+    }
+  ]
+}
