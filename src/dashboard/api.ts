@@ -7,6 +7,7 @@ import type { DashboardApi } from './data'
 export function getDashboardApi(): DashboardApi | null {
   if (typeof window === 'undefined') return null
   return {
+    getOnboardingStatus: () => trpc.onboardingStatus.query(),
     listConversations: () => trpc.listConversations.query(),
     getConversation: (id) => trpc.getConversation.query(id),
     listRuns: (id) => trpc.listRuns.query(id),
@@ -17,5 +18,8 @@ export function getDashboardApi(): DashboardApi | null {
     syncMessagesNow: () => trpc.syncMessages.mutate(),
     syncContactsNow: () => trpc.syncContacts.mutate(),
     searchContacts: (query) => trpc.searchContacts.query(query),
+    syncLocalDataNow: () => trpc.syncLocalData.mutate(),
+    openFullDiskAccessSettings: () => trpc.openFullDiskAccessSettings.mutate(),
+    openContactsSettings: () => trpc.openContactsSettings.mutate(),
   }
 }

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
@@ -7,6 +8,16 @@ import type { IMessageBatch, IMessageChat, IMessageHandle, IMessageMessage } fro
 
 export const DEFAULT_CHAT_DB_PATH = join(homedir(), 'Library', 'Messages', 'chat.db')
 const APPLE_EPOCH_OFFSET = 978_307_200
+
+export type IMessageReadinessState = 'authorized' | 'missing' | 'needs_full_disk_access' | 'blocked'
+
+export interface IMessageReadiness {
+  state: IMessageReadinessState
+  chatDbPath: string
+  maxRowid: number | null
+  summary: string
+  error?: string
+}
 
 type MessageStatus = IMessageMessage['status']
 
@@ -65,6 +76,13 @@ export class LocalIMessageReader {
 
   close(): void {
     this.db.close()
+  }
+
+  getMaxMessageRowid(): number {
+    const row = this.db.prepare('SELECT MAX(ROWID) AS max_rowid FROM message').get() as
+      | { max_rowid: number | null }
+      | undefined
+    return row?.max_rowid ?? 0
   }
 
   buildBatch(lastRowid: number, limit = 500): IMessageBatch {
@@ -246,5 +264,49 @@ export class LocalIMessageReader {
     return chatIds
       .map((chatId) => chatsById.get(chatId) ?? null)
       .filter((chat): chat is IMessageChat => Boolean(chat))
+  }
+}
+
+function isPermissionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /authorization denied|unable to open database file|SQLITE_CANTOPEN|EACCES|EPERM/i.test(
+    message,
+  )
+}
+
+export function checkIMessageReadiness(path = DEFAULT_CHAT_DB_PATH): IMessageReadiness {
+  if (!existsSync(path)) {
+    return {
+      state: 'missing',
+      chatDbPath: path,
+      maxRowid: null,
+      summary: 'Messages database was not found on this Mac.',
+    }
+  }
+
+  try {
+    const reader = new LocalIMessageReader(path)
+    try {
+      const maxRowid = reader.getMaxMessageRowid()
+      return {
+        state: 'authorized',
+        chatDbPath: path,
+        maxRowid,
+        summary: 'Full Disk Access is available for local Messages sync.',
+      }
+    } finally {
+      reader.close()
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      state: isPermissionError(error) ? 'needs_full_disk_access' : 'blocked',
+      chatDbPath: path,
+      maxRowid: null,
+      summary: isPermissionError(error)
+        ? 'Full Disk Access is needed before local Messages sync can read the database.'
+        : 'Messages readiness could not be verified.',
+      error: message,
+    }
   }
 }

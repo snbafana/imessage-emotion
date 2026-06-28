@@ -2,6 +2,22 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
+export type ContactsPermissionState =
+  | 'authorized'
+  | 'not_determined'
+  | 'denied'
+  | 'restricted'
+  | 'limited'
+  | 'unknown'
+  | 'check_failed'
+
+export interface ContactsReadiness {
+  state: ContactsPermissionState
+  summary: string
+  canSync: boolean
+  error?: string
+}
+
 export interface ContactRecord {
   sourceId: string
   displayName: string
@@ -17,7 +33,6 @@ type ContactRecordInput = Partial<ContactRecord> & {
   emails?: string[]
 }
 
-const CUED_NATIVE_HELPER_NAME = 'cued-native-helper'
 const APP_NATIVE_HELPER_NAME = 'imessage-emotion-native-helper'
 
 function normalizeContactRecord(contact: ContactRecordInput, index: number): ContactRecord {
@@ -82,11 +97,6 @@ export function getNativeContactsHelperCandidates(env: NodeJS.ProcessEnv = proce
       'release',
       APP_NATIVE_HELPER_NAME,
     ),
-    env.CUED_CONTACTS_NATIVE_BINARY,
-    env.CUED_APP_PATH
-      ? join(env.CUED_APP_PATH, 'Contents', 'Resources', 'helpers', CUED_NATIVE_HELPER_NAME)
-      : null,
-    join('/Applications', 'Cued.app', 'Contents', 'Resources', 'helpers', CUED_NATIVE_HELPER_NAME),
   ].filter((candidate): candidate is string => Boolean(candidate?.trim()))
 }
 
@@ -162,6 +172,91 @@ export function loadLocalContacts(path = process.env.IMESSAGE_CONTACTS_JSON_PATH
   if (process.env.IMESSAGE_CONTACTS_ALLOW_JXA === '1') return loadContactsFromMacOS()
 
   throw new Error(
-    'Contacts native helper not found. Set IMESSAGE_CONTACTS_NATIVE_BINARY or install Cued.app; set IMESSAGE_CONTACTS_ALLOW_JXA=1 to use the slow JXA fallback.',
+    'Contacts native helper not found. Set IMESSAGE_CONTACTS_NATIVE_BINARY or IMESSAGE_CONTACTS_ALLOW_JXA=1 to use the slow JXA fallback.',
   )
+}
+
+function contactsStatusSummary(state: ContactsPermissionState): string {
+  switch (state) {
+    case 'authorized':
+      return 'Contacts permission is granted for local Contacts sync.'
+    case 'not_determined':
+      return 'Contacts permission has not been requested yet.'
+    case 'denied':
+      return 'Contacts permission is denied.'
+    case 'restricted':
+      return 'Contacts permission is restricted by macOS policy.'
+    case 'limited':
+      return 'Contacts permission is limited.'
+    case 'check_failed':
+      return 'Contacts permission could not be checked.'
+    case 'unknown':
+      return 'Contacts permission status is unknown.'
+  }
+}
+
+function parseContactsAuthorizationStatus(value: string): ContactsPermissionState {
+  switch (value.trim()) {
+    case '0':
+      return 'not_determined'
+    case '1':
+      return 'restricted'
+    case '2':
+      return 'denied'
+    case '3':
+      return 'authorized'
+    case '4':
+      return 'limited'
+    default:
+      return 'unknown'
+  }
+}
+
+export function checkContactsReadiness(): ContactsReadiness {
+  if (process.env.IMESSAGE_CONTACTS_JSON_PATH) {
+    return {
+      state: 'authorized',
+      summary: 'Contacts sync is configured to use a local contacts JSON file.',
+      canSync: true,
+    }
+  }
+
+  if (process.platform !== 'darwin') {
+    return {
+      state: 'unknown',
+      summary: 'Contacts permission can only be checked on macOS.',
+      canSync: false,
+    }
+  }
+
+  try {
+    const stdout = execFileSync(
+      'osascript',
+      [
+        '-l',
+        'JavaScript',
+        '-e',
+        "ObjC.import('Contacts'); String($.CNContactStore.authorizationStatusForEntityType($.CNEntityTypeContacts));",
+      ],
+      {
+        encoding: 'utf8',
+        timeout: 10_000,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    )
+    const state = parseContactsAuthorizationStatus(stdout)
+    return {
+      state,
+      summary: contactsStatusSummary(state),
+      canSync: state === 'authorized' || state === 'limited' || state === 'not_determined',
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      state: 'check_failed',
+      summary: contactsStatusSummary('check_failed'),
+      canSync: false,
+      error: message,
+    }
+  }
 }
