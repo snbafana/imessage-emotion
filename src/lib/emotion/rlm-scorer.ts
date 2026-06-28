@@ -1,8 +1,9 @@
-import { agent, ai, AxJSRuntime, f, fn } from '@ax-llm/ax'
+import { agent, AxJSRuntime, f, fn } from '@ax-llm/ax'
 import type { AppDatabase } from '../db/schema'
 import { getRunWindows } from '../api/runs'
 import { getWindowMessages } from '../api/messages'
 import { EKMAN_ANCHORS, type Anchor, type AnchorScores } from './anchors'
+import { clamp, dominantOf, gatewayService, lenientParse } from './ax-shared'
 
 // RLM scorer: instead of the host orchestrating one tool call per window (which
 // caps out when the model has to emit hundreds of calls in a turn), a single ax
@@ -38,41 +39,6 @@ export type RlmOptions = {
   maxSubAgentCalls?: number
   maxTurns?: number
   onProgress?: RlmProgress
-}
-
-const clamp = (n: unknown) => Math.max(0, Math.min(1, Number(n) || 0))
-const dominantOf = (s: AnchorScores): Anchor =>
-  EKMAN_ANCHORS.reduce((a, b) => (s[b] > s[a] ? b : a), 'neutral' as Anchor)
-
-// The sub-query returns a string; tolerate prose around the JSON object.
-function lenientParse(raw: unknown): Record<string, unknown> | null {
-  if (raw && typeof raw === 'object') return raw as Record<string, unknown>
-  if (typeof raw !== 'string') return null
-  try {
-    return JSON.parse(raw) as Record<string, unknown>
-  } catch {
-    const match = raw.match(/\{[\s\S]*\}/)
-    if (match) {
-      try {
-        return JSON.parse(match[0]) as Record<string, unknown>
-      } catch {
-        return null
-      }
-    }
-    return null
-  }
-}
-
-function gatewayService(model: string) {
-  const apiKey = process.env.AI_GATEWAY_API_KEY
-  if (!apiKey) throw new Error('AI_GATEWAY_API_KEY not set')
-  return ai({
-    name: 'openai',
-    apiKey,
-    apiURL: 'https://ai-gateway.vercel.sh/v1',
-    models: [{ key: 'default', description: model, model: model as never }],
-    config: { model: 'default' as never, temperature: 0 },
-  } as never)
 }
 
 export async function scoreRunWithRlm(
@@ -178,7 +144,7 @@ export async function scoreRunWithRlm(
     functions: [nextBatch, persistScores],
     contextPolicy: { preset: 'checkpointed', budget: 'balanced' },
     maxSubAgentCalls: opts.maxSubAgentCalls ?? 2000,
-    maxBatchedLlmQueryConcurrency: opts.subConcurrency ?? 8,
+    maxBatchedLlmQueryConcurrency: opts.subConcurrency ?? 50,
     // Top-level cap on actor turns before the responder is forced (default 8/10).
     // A many-window run needs one turn per batch, so give it generous headroom.
     maxTurns: opts.maxTurns ?? 80,
