@@ -1,5 +1,5 @@
 import { getDb } from '../../src/lib/db/connection'
-import { createBaselineRun } from '../../src/lib/emotion/run-baseline'
+import { createAxRun } from '../../src/lib/emotion/run-analysis'
 import { getRunWindows } from '../../src/lib/api/runs'
 import { scoreRunWithRlm } from '../../src/lib/emotion/rlm-scorer'
 
@@ -13,7 +13,7 @@ async function main() {
   const batchSize = Number(process.argv[5] ?? 12)
 
   const db = getDb()
-  const { runId, windowCount } = createBaselineRun(db, conversationId, {
+  const { runId, windowCount } = createAxRun(db, conversationId, {
     mode: 'comparative-message-count',
     contextMessages: focal * 2,
     focalMessages: focal,

@@ -1,9 +1,9 @@
 import { ax } from '@ax-llm/ax'
 import { getDb } from '../../src/lib/db/connection'
-import { createBaselineRun } from '../../src/lib/emotion/run-baseline'
+import { createAxRun } from '../../src/lib/emotion/run-analysis'
 import { getRunWindows } from '../../src/lib/api/runs'
 import { getWindowMessages } from '../../src/lib/api/messages'
-import { EKMAN_ANCHORS, type Anchor, type AnchorScores } from '../../src/lib/emotion/anchors'
+import { EKMAN_ANCHORS, type AnchorScores } from '../../src/lib/emotion/anchors'
 import { clamp, dominantOf, gatewayService } from '../../src/lib/emotion/ax-shared'
 import { triageRunWithRoberta } from '../../src/lib/emotion/roberta-triage'
 import { scoreRunWithRlm } from '../../src/lib/emotion/rlm-scorer'
@@ -18,7 +18,7 @@ const CONCURRENCY = 50
 type Row = { method: string; scored: number; total: number; wallMs: number; rate: string; notes: string }
 
 function freshRun(db: ReturnType<typeof getDb>, conversationId: number, focal: number, stride: number) {
-  return createBaselineRun(db, conversationId, {
+  return createAxRun(db, conversationId, {
     mode: 'comparative-message-count',
     contextMessages: focal * 2,
     focalMessages: focal,
