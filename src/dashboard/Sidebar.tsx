@@ -10,13 +10,18 @@ export default function Sidebar({
   loading,
   error,
   onSelect,
+  searchQuery,
+  onSearchChange,
 }: {
   activeId: string | null
   conversations: ConversationView[]
   loading: boolean
   error: string | null
   onSelect: (id: string) => void
+  searchQuery: string
+  onSearchChange: (value: string) => void
 }) {
+  const searching = searchQuery.trim().length > 0
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -26,7 +31,12 @@ export default function Sidebar({
 
       <div className="search">
         <SearchIcon />
-        <Input placeholder="Search people" aria-label="Search people" />
+        <Input
+          placeholder="Search people"
+          aria-label="Search people"
+          value={searchQuery}
+          onChange={(event) => onSearchChange(event.target.value)}
+        />
       </div>
 
       <span className="label section-label">
@@ -35,7 +45,11 @@ export default function Sidebar({
 
       {error && <div className="sidebar-note error">{error}</div>}
       {!loading && conversations.length === 0 && !error && (
-        <div className="sidebar-note">No analyzed conversations yet — recompute one to see it here.</div>
+        <div className="sidebar-note">
+          {searching
+            ? `No people match “${searchQuery.trim()}”.`
+            : 'No analyzed conversations yet — recompute one to see it here.'}
+        </div>
       )}
 
       <div className="people">

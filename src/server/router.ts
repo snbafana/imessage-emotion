@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { publicProcedure, router } from './trpc'
 import { getDb } from '@/lib/db/connection'
 import { getConversation, listConversations } from '@/lib/api/conversations'
+import { searchContacts } from '@/lib/contacts/search'
 import { getRunWindows, listRuns } from '@/lib/api/runs'
 import { getWindowMessages } from '@/lib/api/messages'
 import { createBaselineRun } from '@/lib/emotion/run-baseline'
@@ -34,6 +35,10 @@ export const appRouter = router({
   getConversation: publicProcedure
     .input(z.number())
     .query(({ input }) => getConversation(getDb(), input)),
+
+  searchContacts: publicProcedure
+    .input(z.string())
+    .query(({ input }) => searchContacts(getDb(), input)),
 
   listRuns: publicProcedure.input(z.number()).query(({ input }) => listRuns(getDb(), input)),
 

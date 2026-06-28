@@ -16,5 +16,6 @@ export function getDashboardApi(): DashboardApi | null {
     getSyncStatus: () => trpc.syncStatus.query(),
     syncMessagesNow: () => trpc.syncMessages.mutate(),
     syncContactsNow: () => trpc.syncContacts.mutate(),
+    searchContacts: (query) => trpc.searchContacts.query(query),
   }
 }

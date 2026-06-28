@@ -45,6 +45,15 @@ export interface ConversationSummary {
   latestRun?: RunSummary | null
 }
 
+export interface ContactSearchHit {
+  contactId: number
+  displayName: string | null
+  handleIdentifier: string
+  company: string | null
+  conversationIds: number[]
+  score: number
+}
+
 export interface ConversationParticipant {
   id: number
   handle: string
