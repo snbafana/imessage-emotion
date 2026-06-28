@@ -6,6 +6,7 @@ import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
 import EmotionTimeline from './EmotionTimeline'
 import ChatPanel from './ChatPanel'
+import ControlRoom from './ControlRoom'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
 import { getDashboardApi } from './api'
@@ -63,6 +64,7 @@ export default function Dashboard() {
   const chat = useEveAgent()
   const chatBusy = chat.status === 'submitted' || chat.status === 'streaming'
   const recomputingRef = useRef(false)
+  const [showControlRoom, setShowControlRoom] = useState(false)
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeId) ?? null,
@@ -287,6 +289,7 @@ export default function Dashboard() {
   function recomputeWithAx() {
     if (!selectedConversation || chatBusy) return
     recomputingRef.current = true
+    setShowControlRoom(true)
     setActionStatus('Recomputing with the ax scorer — streaming in chat…')
     void chat.send({
       message: `Recompute the emotion timeline for this conversation end-to-end with the ax scorer at medium effort, window by window, then summarize the arc.`,
@@ -381,6 +384,10 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {showControlRoom && (
+        <ControlRoom agent={chat} title={selectedConversation?.title} onClose={() => setShowControlRoom(false)} />
+      )}
     </div>
   )
 }
