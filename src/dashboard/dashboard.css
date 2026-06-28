@@ -1185,8 +1185,8 @@
 .cr-card {
   display: flex;
   flex-direction: column;
-  gap: 11px;
-  width: 320px;
+  gap: 10px;
+  width: 340px;
   padding: 15px 16px;
   background: #fff;
   border: 1px solid var(--hair);
@@ -1224,6 +1224,47 @@
   font-size: 10px;
   color: var(--muted);
 }
+.cr-excerpt {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 54px;
+  padding: 9px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--hair-soft);
+  border-radius: 9px;
+}
+.cr-excerpt-empty {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+.cr-line {
+  display: flex;
+  gap: 7px;
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+.cr-line-who {
+  flex-shrink: 0;
+  width: 30px;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding-top: 2px;
+  color: var(--faint);
+}
+.cr-line.me .cr-line-who {
+  color: var(--cobalt);
+}
+.cr-line-text {
+  color: var(--ink-2);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
 .cr-bars {
   display: flex;
   align-items: flex-end;
@@ -1250,4 +1291,19 @@
   font-family: var(--mono);
   font-size: 10px;
   color: var(--faint);
+}
+.cr-why {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  padding: 9px 10px;
+  background: var(--cobalt-bg);
+  border: 1px solid var(--cobalt-border);
+  border-radius: 9px;
+}
+.cr-why-pending {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--cobalt);
+  opacity: 0.7;
 }

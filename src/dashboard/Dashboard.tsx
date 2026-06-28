@@ -398,7 +398,7 @@ export default function Dashboard() {
       </div>
 
       {showControlRoom && (
-        <ControlRoom agent={chat} title={selectedConversation?.title} onClose={() => setShowControlRoom(false)} />
+        <ControlRoom agent={chat} api={api} title={selectedConversation?.title} onClose={() => setShowControlRoom(false)} />
       )}
     </div>
   )
