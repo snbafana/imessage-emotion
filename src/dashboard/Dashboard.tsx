@@ -45,6 +45,20 @@ export default function Dashboard() {
   const [actionStatus, setActionStatus] = useState<string | null>(null)
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const [syncError, setSyncError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  // null = no active search (show everything); a Set = the conversation ids
+  // whose participants matched the contacts FTS query.
+  const [matchedConversationIds, setMatchedConversationIds] = useState<Set<string> | null>(null)
+
+  const visibleConversations = useMemo(
+    () =>
+      matchedConversationIds === null
+        ? conversations
+        : conversations.filter((conversation) =>
+            matchedConversationIds.has(String(conversation.rawId)),
+          ),
+    [conversations, matchedConversationIds],
+  )
 
   const chat = useEveAgent()
   const chatBusy = chat.status === 'submitted' || chat.status === 'streaming'
@@ -153,6 +167,34 @@ export default function Dashboard() {
   useEffect(() => {
     void reloadConversations()
   }, [reloadConversations])
+
+  useEffect(() => {
+    const query = searchQuery.trim()
+    if (!query || !api?.searchContacts) {
+      setMatchedConversationIds(null)
+      return
+    }
+
+    let cancelled = false
+    const handle = window.setTimeout(async () => {
+      try {
+        const hits = await api.searchContacts(query)
+        if (cancelled) return
+        const ids = new Set<string>()
+        for (const hit of hits) {
+          for (const conversationId of hit.conversationIds) ids.add(String(conversationId))
+        }
+        setMatchedConversationIds(ids)
+      } catch {
+        if (!cancelled) setMatchedConversationIds(new Set())
+      }
+    }, 150)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(handle)
+    }
+  }, [api, searchQuery])
 
   useEffect(() => {
     void reloadRun(selectedConversation)
@@ -264,10 +306,12 @@ export default function Dashboard() {
     <div className="dashboard">
       <Sidebar
         activeId={activeId}
-        conversations={conversations}
+        conversations={visibleConversations}
         loading={conversationLoading}
         error={conversationError}
         onSelect={setActiveId}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
 
       <div className="main">

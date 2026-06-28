@@ -1,5 +1,6 @@
 import type {
   AnalysisWindow as ApiAnalysisWindow,
+  ContactSearchHit as ApiContactSearchHit,
   ConversationSummary as ApiConversationSummary,
   RunSummary as ApiRunSummary,
   SyncStatus as ApiSyncStatus,
@@ -20,6 +21,7 @@ export type DashboardApi = {
   getSyncStatus(): Promise<ApiSyncStatus>
   syncMessagesNow(): Promise<ApiSyncStatus>
   syncContactsNow(): Promise<ApiSyncStatus>
+  searchContacts(query: string): Promise<ApiContactSearchHit[]>
 }
 
 // Canonical Ekman-7 anchors, shared with the scorer + eve agent.

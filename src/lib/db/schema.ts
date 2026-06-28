@@ -138,6 +138,52 @@ export function migrate(db: AppDatabase): void {
     CREATE INDEX IF NOT EXISTS analysis_runs_conversation_idx
       ON analysis_runs(conversation_id, started_at DESC);
   `)
+
+  ensureContactsFts(db)
+}
+
+// Full-text search index over contacts, used by the sidebar "Search people"
+// box. It is an FTS5 external-content table (content='contacts') so the rows
+// are not duplicated — the index just points back at contacts by rowid — and
+// triggers keep it in lockstep with INSERT/UPDATE/DELETE on contacts.
+function ensureContactsFts(db: AppDatabase): void {
+  const created = !tableExists(db, 'contacts_fts')
+
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS contacts_fts USING fts5(
+      display_name,
+      handle_identifier,
+      normalized_handle,
+      company,
+      content='contacts',
+      content_rowid='id',
+      tokenize='unicode61'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS contacts_fts_ai AFTER INSERT ON contacts BEGIN
+      INSERT INTO contacts_fts(rowid, display_name, handle_identifier, normalized_handle, company)
+      VALUES (new.id, new.display_name, new.handle_identifier, new.normalized_handle, new.company);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS contacts_fts_ad AFTER DELETE ON contacts BEGIN
+      INSERT INTO contacts_fts(contacts_fts, rowid, display_name, handle_identifier, normalized_handle, company)
+      VALUES ('delete', old.id, old.display_name, old.handle_identifier, old.normalized_handle, old.company);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS contacts_fts_au AFTER UPDATE ON contacts BEGIN
+      INSERT INTO contacts_fts(contacts_fts, rowid, display_name, handle_identifier, normalized_handle, company)
+      VALUES ('delete', old.id, old.display_name, old.handle_identifier, old.normalized_handle, old.company);
+      INSERT INTO contacts_fts(rowid, display_name, handle_identifier, normalized_handle, company)
+      VALUES (new.id, new.display_name, new.handle_identifier, new.normalized_handle, new.company);
+    END;
+  `)
+
+  // When the index is created on a DB that already holds contacts (the upgrade
+  // path), backfill it from the content table. 'rebuild' re-reads all of
+  // contacts; on a brand-new DB it is a cheap no-op.
+  if (created) {
+    db.exec(`INSERT INTO contacts_fts(contacts_fts) VALUES('rebuild');`)
+  }
 }
 
 function resetLegacyAnalysisTables(db: AppDatabase): void {
