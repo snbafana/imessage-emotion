@@ -5,7 +5,7 @@ import type { IMessageBatch, IMessageChat, IMessageHandle, IMessageMessage } fro
 const IMPORT_SOURCE = 'imessage'
 const TEMPORARY_ORDINAL_OFFSET = 1_000_000_000_000
 
-export interface ImportResult {
+interface ImportResult {
   fetchedCount: number
   importedMessages: number
   cursor: number
@@ -38,7 +38,8 @@ function upsertContact(db: AppDatabase, handle: IMessageHandle): number {
 
   const row = db
     .prepare('SELECT id FROM contacts WHERE normalized_handle = ? AND service = ?')
-    .get(normalized, service) as { id: number }
+    .get(normalized, service) as { id: number } | undefined
+  if (!row) throw new Error('contact upsert did not produce a row')
   return row.id
 }
 
@@ -57,7 +58,8 @@ function upsertConversation(db: AppDatabase, chat: IMessageChat): number {
 
   const row = db
     .prepare('SELECT id FROM conversations WHERE source_chat_id = ?')
-    .get(chat.id) as { id: number }
+    .get(chat.id) as { id: number } | undefined
+  if (!row) throw new Error('conversation upsert did not produce a row')
   const conversationId = row.id
 
   for (const participant of chat.participants) {
@@ -125,7 +127,7 @@ function insertMessage(db: AppDatabase, message: IMessageMessage, conversationId
       toMilliseconds(message.timestamp),
       message.isFromMe ? 1 : 0,
       message.isRead ? 1 : 0,
-      message.readAt ? toMilliseconds(message.readAt) : null,
+      message.readAt != null ? toMilliseconds(message.readAt) : null,
       message.status,
       message.errorCode,
       message.hasAttachments ? 1 : 0,

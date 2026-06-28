@@ -2,7 +2,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import Database from 'better-sqlite3'
 import { extractTextFromAttributedBody } from './attributed-body'
-import { buildHandleCandidates, normalizeChatDbHandleIdentifier } from './handle-normalization'
+import { normalizeChatDbHandleIdentifier } from './handle-normalization'
 import type { IMessageBatch, IMessageChat, IMessageHandle, IMessageMessage } from './types'
 
 export const DEFAULT_CHAT_DB_PATH = join(homedir(), 'Library', 'Messages', 'chat.db')
@@ -65,57 +65,6 @@ export class LocalIMessageReader {
 
   close(): void {
     this.db.close()
-  }
-
-  getMaxMessageRowid(): number {
-    const row = this.db.prepare('SELECT MAX(ROWID) AS max_rowid FROM message').get() as
-      | { max_rowid: number | null }
-      | undefined
-    return row?.max_rowid ?? 0
-  }
-
-  findDirectChatIdByHandleIdentifier(identifier: string): number | null {
-    const candidates = buildHandleCandidates(identifier)
-    if (candidates.length === 0) return null
-
-    const row = this.db
-      .prepare(
-        `
-        WITH requested_handles AS (
-          SELECT LOWER(value) AS candidate
-          FROM json_each(?)
-        ),
-        candidate_chats AS (
-          SELECT
-            c.ROWID AS chat_id,
-            MAX(m.date) AS last_message_date,
-            MAX(m.ROWID) AS last_message_rowid
-          FROM chat c
-          JOIN chat_handle_join chj ON chj.chat_id = c.ROWID
-          JOIN handle h ON h.ROWID = chj.handle_id
-          LEFT JOIN chat_message_join cmj ON cmj.chat_id = c.ROWID
-          LEFT JOIN message m ON m.ROWID = cmj.message_id
-          WHERE LOWER(h.id) IN (SELECT candidate FROM requested_handles)
-            AND NOT EXISTS (
-              SELECT 1
-              FROM chat_handle_join other
-              WHERE other.chat_id = c.ROWID
-                AND other.handle_id <> h.ROWID
-            )
-          GROUP BY c.ROWID
-        )
-        SELECT chat_id
-        FROM candidate_chats
-        ORDER BY
-          COALESCE(last_message_date, 0) DESC,
-          COALESCE(last_message_rowid, 0) DESC,
-          chat_id DESC
-        LIMIT 1
-      `,
-      )
-      .get(JSON.stringify(candidates)) as { chat_id: number | null } | undefined
-
-    return row?.chat_id ?? null
   }
 
   buildBatch(lastRowid: number, limit = 500): IMessageBatch {

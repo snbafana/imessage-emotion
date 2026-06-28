@@ -107,7 +107,7 @@ describe('message import', () => {
         `,
         )
         .run(),
-    ).toThrow()
+    ).toThrow(/UNIQUE constraint failed: messages\.conversation_id, messages\.conversation_ordinal/)
   })
 
   it('dedupes contacts by normalized handle and service', () => {
