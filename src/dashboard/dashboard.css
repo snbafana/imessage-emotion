@@ -125,6 +125,18 @@
   overflow-y: auto;
   padding-right: 2px;
 }
+.people-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.people-group + .people-group {
+  margin-top: 16px;
+}
+.people-group-label {
+  padding: 0 8px 6px;
+}
+
 .person {
   display: flex;
   align-items: center;
