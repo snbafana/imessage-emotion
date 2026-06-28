@@ -35,3 +35,7 @@ experiments/sqlite-latency/rust/target/
 *.sqlite-shm
 *.sqlite-wal
 .data/
+
+# eve / workflow runtime artifacts
+.eve/
+.workflow-data/

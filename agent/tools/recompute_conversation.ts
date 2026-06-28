@@ -14,10 +14,14 @@ export default defineTool({
   }),
   async execute({ conversationId, windowSize, stride }) {
     const db = getDb()
-    // Creates analysis_runs + windows from the conversation's messages.
+    // Creates analysis_runs + windows from the conversation's messages. Keep the
+    // window config internally consistent (minFocalMessages <= focalMessages).
     const { runId, windowCount } = createBaselineRun(db, conversationId, {
+      mode: 'comparative-message-count',
+      contextMessages: windowSize * 2,
       focalMessages: windowSize,
       stride,
+      minFocalMessages: Math.max(1, Math.min(windowSize, 8)),
     })
     const windows = getRunWindows(db, runId)
     return {
