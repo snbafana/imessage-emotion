@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
 import EmotionTimeline from './EmotionTimeline'
+import ChatPanel from './ChatPanel'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
 import { getDashboardApi } from './api'
@@ -264,6 +265,12 @@ export default function Dashboard() {
               focalMessages={focalMessages}
               loading={windowLoading}
               error={windowError}
+            />
+            <ChatPanel
+              conversationId={selectedConversation ? Number(selectedConversation.rawId) : undefined}
+              runId={run ? Number(run.rawId) : undefined}
+              windowId={selectedWindow ? Number(selectedWindow.rawId) : null}
+              label={selectedConversation?.title}
             />
           </div>
         </div>

@@ -19,7 +19,7 @@ const baselineOptions = z
     focalMessages: z.number(),
     stride: z.number(),
     minFocalMessages: z.number(),
-    scorerConfig: z.record(z.unknown()),
+    scorerConfig: z.record(z.string(), z.unknown()),
   })
   .partial()
 

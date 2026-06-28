@@ -30,3 +30,8 @@ experiments/sqlite-latency/tmp/
 experiments/sqlite-latency/results/
 experiments/sqlite-latency/target/
 experiments/sqlite-latency/rust/target/
+
+# sqlite sidecar files
+*.sqlite-shm
+*.sqlite-wal
+.data/
