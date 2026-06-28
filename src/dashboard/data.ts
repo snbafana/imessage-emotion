@@ -1,22 +1,6 @@
-import type {
-  AnalysisWindow as ApiAnalysisWindow,
-  ConversationSummary as ApiConversationSummary,
-  ImessageEmotionApi,
-  RunSummary as ApiRunSummary,
-  WindowMessage as ApiWindowMessage,
-  WindowMessageSlice,
-} from '../lib/api/types'
+import type { ImessageEmotionApi, WindowMessageSlice } from '../lib/api/types'
 
-export type EmotionKey =
-  | 'warmth'
-  | 'joy'
-  | 'trust'
-  | 'stress'
-  | 'friction'
-  | 'sadness'
-  | 'anger'
-  | 'fear'
-  | 'surprise'
+type EmotionKey = 'warmth' | 'joy' | 'trust' | 'stress' | 'friction' | 'sadness'
 
 export const EMOTIONS: Record<EmotionKey, { label: string; color: string; ink: string }> = {
   warmth: { label: 'Warmth', color: 'oklch(0.69 0.12 182)', ink: 'oklch(0.52 0.12 182)' },
@@ -25,100 +9,14 @@ export const EMOTIONS: Record<EmotionKey, { label: string; color: string; ink: s
   stress: { label: 'Stress', color: 'oklch(0.58 0.17 300)', ink: 'oklch(0.5 0.16 300)' },
   friction: { label: 'Friction', color: 'oklch(0.63 0.2 27)', ink: 'oklch(0.52 0.2 27)' },
   sadness: { label: 'Sadness', color: 'oklch(0.61 0.13 252)', ink: 'oklch(0.5 0.13 252)' },
-  anger: { label: 'Anger', color: 'oklch(0.63 0.2 27)', ink: 'oklch(0.52 0.2 27)' },
-  fear: { label: 'Fear', color: 'oklch(0.58 0.17 300)', ink: 'oklch(0.5 0.16 300)' },
-  surprise: { label: 'Surprise', color: 'oklch(0.84 0.16 108)', ink: 'oklch(0.58 0.14 108)' },
 }
 
 export const SCORE_KEYS = ['warmth', 'joy', 'stress', 'friction', 'sadness'] as const
 
-export type ScoreKey = (typeof SCORE_KEYS)[number]
-export type Scores = Partial<Record<ScoreKey, number>>
-export type RunState = 'no-run' | 'pending' | 'scored' | 'failed' | 'unknown'
-export type MessageSlice = WindowMessageSlice
-
-export type ConversationSummary = Partial<ApiConversationSummary> & {
-  id: string | number
-  title?: string
-  displayName?: string
-  display_name?: string
-  participantSummary?: string
-  participant_summary?: string
-  messageCount?: number
-  message_count?: number
-  firstMessageAt?: number | string | null
-  first_message_at?: number | string | null
-  lastMessageAt?: number | string | null
-  last_message_at?: number | string | null
-  latestRun?: RunSummary | null
-  latest_run?: RunSummary | null
-}
-
-export type RunSummary = Partial<ApiRunSummary> & {
-  id: string | number
-  conversationId?: string | number
-  conversation_id?: string | number
-  methodKey?: string
-  method_key?: string
-  status?: string
-  startedAt?: number | string | null
-  started_at?: number | string | null
-  completedAt?: number | string | null
-  completed_at?: number | string | null
-  error?: string | null
-  summaryJson?: unknown
-  summary_json?: unknown
-  windowCount?: number
-  window_count?: number
-  scoredWindowCount?: number
-  scored_window_count?: number
-}
-
-export type AnalysisWindow = Partial<ApiAnalysisWindow> & {
-  id: string | number
-  runId?: string | number
-  run_id?: string | number
-  ordinal?: number
-  startOrdinal?: number
-  start_ordinal?: number
-  endOrdinal?: number
-  end_ordinal?: number
-  contextStartOrdinal?: number | null
-  context_start_ordinal?: number | null
-  contextEndOrdinal?: number | null
-  context_end_ordinal?: number | null
-  focalStartOrdinal?: number
-  focal_start_ordinal?: number
-  focalEndOrdinal?: number
-  focal_end_ordinal?: number
-  messageCount?: number
-  message_count?: number
-  contextMessageCount?: number
-  context_message_count?: number
-  focalMessageCount?: number
-  focal_message_count?: number
-  resultJson?: unknown
-  result_json?: unknown
-  shiftJson?: unknown
-  shift_json?: unknown
-  status?: string
-  error?: string | null
-}
-
-export type WindowMessage = Partial<ApiWindowMessage> & {
-  id: string | number
-  conversationOrdinal?: number
-  conversation_ordinal?: number
-  text?: string | null
-  sentAt?: number | string | null
-  sent_at?: number | string | null
-  isFromMe?: boolean | number
-  is_from_me?: boolean | number
-  senderName?: string | null
-  sender_name?: string | null
-  displayName?: string | null
-  display_name?: string | null
-}
+type ScoreKey = (typeof SCORE_KEYS)[number]
+type Scores = Partial<Record<ScoreKey, number>>
+type RunState = 'no-run' | 'pending' | 'scored' | 'failed' | 'unknown'
+type MessageSlice = WindowMessageSlice
 
 export type ConversationView = {
   id: string
@@ -185,13 +83,13 @@ export type MessageView = {
   ordinal: number | null
 }
 
-export type TimelineBlock = {
+type TimelineBlock = {
   window: WindowView
   composition: { emotion: EmotionKey; weight: number }[]
   intensity: number
 }
 
-export type DashboardSmokeHtmlInput = {
+type DashboardSmokeHtmlInput = {
   conversations: ConversationView[]
   run: RunView | null
   windows: WindowView[]
@@ -604,20 +502,3 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
 }
-
-export type ChatTurn = {
-  role: 'user' | 'agent'
-  text: string
-  citation?: { label: string; delta: string; color: string }
-}
-
-// Legacy demo copy is kept only for the deferred chat panel, which is not mounted
-// by the real dashboard lane.
-export const CHAT: ChatTurn[] = [
-  { role: 'user', text: 'why did things recover after that March fight?' },
-  {
-    role: 'agent',
-    text: 'Demo chat is deferred until the non-session conversation API lands.',
-    citation: { label: 'Demo only', delta: '+0.00', color: EMOTIONS.trust.ink },
-  },
-]

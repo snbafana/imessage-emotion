@@ -7,8 +7,6 @@ import {
   type ConversationChatPacket,
 } from './retrieve.ts'
 
-export type { AskConversationInput, ConversationChatPacket }
-
 export interface ChatCitation {
   type: 'window' | 'message' | 'run'
   id: number
@@ -27,7 +25,7 @@ export function answerConversation(
   return answerConversationFromPacket(retrieveConversationContext(db, input))
 }
 
-export function answerConversationFromPacket(
+function answerConversationFromPacket(
   packet: ConversationChatPacket,
 ): ConversationChatResponse {
   const selected = packet.selectedWindow

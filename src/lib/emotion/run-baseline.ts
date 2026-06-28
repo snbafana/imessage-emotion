@@ -11,13 +11,12 @@ export interface CreateBaselineRunOptions extends Partial<RunWindowConfig> {
   scorerConfig?: Record<string, unknown>
 }
 
-export interface CreateBaselineRunResult {
+interface CreateBaselineRunResult {
   runId: number
   windowCount: number
-  summary: BaselineRunSummary
 }
 
-export interface BaselineRunSummary {
+interface BaselineRunSummary {
   method: 'baseline-v1'
   windowCount: number
   averageScores: BaselineResult['scores']
@@ -25,7 +24,7 @@ export interface BaselineRunSummary {
   strongestShiftWindowId: number | null
 }
 
-export const DEFAULT_BASELINE_RUN_CONFIG: RunWindowConfig = {
+const DEFAULT_BASELINE_RUN_CONFIG: RunWindowConfig = {
   mode: 'comparative-message-count',
   contextMessages: 100,
   focalMessages: 50,
@@ -74,7 +73,6 @@ export function createBaselineRun(
     return {
       runId,
       windowCount: summary.windowCount,
-      summary,
     }
   } catch (error) {
     db.prepare(

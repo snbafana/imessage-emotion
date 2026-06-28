@@ -43,9 +43,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 process.env.APP_ROOT = path.join(__dirname, '..')
 
 // 🚧 Use ['ENV_NAME'] avoid vite:define plugin - Vite@2.x
-export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
-export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
-export const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
+const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
+const RENDERER_DIST = path.join(process.env.APP_ROOT, 'dist')
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 'public') : RENDERER_DIST
 
@@ -74,11 +73,6 @@ function getSyncStatus(): SyncStatus {
   }
 }
 
-function getDatabase(): AppDatabase {
-  if (!db) throw new Error('Database is not ready')
-  return db
-}
-
 function createBaselineRunSummary(
   conversationId: number,
   options: BaselineRunOptions = {},
@@ -95,8 +89,8 @@ function createBaselineRunSummary(
     minFocalMessages: options.minFocalMessages,
     scorerConfig: options.scorerConfig,
   }
-  const result = createBaselineRun(getDatabase(), conversationId, runOptions)
-  const row = getDatabase()
+  const result = createBaselineRun(requireDatabase(), conversationId, runOptions)
+  const row = requireDatabase()
     .prepare(
       `
       SELECT

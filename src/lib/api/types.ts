@@ -11,7 +11,6 @@ export const API_CHANNELS = {
   askConversation: 'imessage-emotion:ask-conversation',
 } as const
 
-export type ApiMethodName = keyof typeof API_CHANNELS
 export type JsonRecord = Record<string, unknown>
 export type SyncPhase = 'idle' | 'syncing' | 'error' | 'stopped'
 
@@ -70,7 +69,6 @@ export interface RunSummary {
   startedAt: number
   completedAt: number | null
   summary: RunSummaryMetadata | Record<string, unknown>
-  summaryJson?: Record<string, unknown>
   error?: string | null
 }
 
@@ -175,9 +173,7 @@ export interface AnalysisWindow {
   metadata: JsonRecord
   status: RunStatus
   result: WindowResult
-  resultJson?: WindowResult
   shift: WindowShiftMetadata | Record<string, unknown>
-  shiftJson?: Record<string, unknown>
   latencyMs: number | null
   error?: string | null
   createdAt: number
@@ -212,12 +208,6 @@ export interface BaselineRunOptions {
 }
 
 export type WindowMessageSlice = 'all' | 'full' | 'context' | 'focal'
-
-export interface WindowMessagesResult {
-  window: AnalysisWindow
-  slice: WindowMessageSlice
-  messages: WindowMessage[]
-}
 
 export interface ChatTurn {
   role: 'user' | 'assistant'

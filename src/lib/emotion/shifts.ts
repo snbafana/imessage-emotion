@@ -280,7 +280,7 @@ function round(value: number): number {
   return Math.round(value * 1000) / 1000
 }
 
-// --- Per-window baseline shift (used by run-baseline; to be reconciled with computeRunShifts) ---
+// --- Per-window baseline shift writer (used by run-baseline; intentionally distinct from the run-level computeRunShifts) ---
 import type { BaselineEmotion, BaselineResult } from './baseline'
 
 export interface WindowShift {
