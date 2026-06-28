@@ -10,7 +10,6 @@ import { getWindowMessages } from '@/lib/api/messages'
 import { getLabelingWindow, listLabelingWindows, saveWindowLabel } from '@/lib/api/labels'
 import { createAxRun, finishAxRun } from '@/lib/emotion/run-analysis'
 import { EKMAN_ANCHORS } from '@/lib/emotion/anchors'
-import { answerConversation } from '@/lib/chat/answer'
 import { getServerSyncEngine } from '@/lib/sync/server-sync'
 import { DEFAULT_CHAT_DB_PATH } from '@/lib/imessage/reader'
 import { buildOnboardingStatus } from '@/lib/onboarding/status'
@@ -32,13 +31,6 @@ const analysisOptions = z
     scorerConfig: z.record(z.string(), z.unknown()),
   })
   .partial()
-
-const askInput = z.object({
-  conversationId: z.number(),
-  question: z.string(),
-  runId: z.number(),
-  windowId: z.number(),
-})
 
 async function openSettings(target: string): Promise<{ opened: boolean }> {
   if (process.platform !== 'darwin') return { opened: false }
@@ -126,10 +118,6 @@ export const appRouter = router({
       if (!run) throw new Error(`Analysis run ${runId} was created but could not be read back`)
       return run
     }),
-
-  askConversation: publicProcedure
-    .input(askInput)
-    .mutation(({ input }) => answerConversation(getDb(), input)),
 
   syncStatus: publicProcedure.query(() => getServerSyncEngine(getDb()).getStatus()),
 

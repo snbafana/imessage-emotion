@@ -9,7 +9,13 @@ import type {
   WindowMessage as ApiWindowMessage,
   WindowMessageSlice,
 } from '../lib/api/types'
-import { ANCHOR_DISPLAY, EKMAN_ANCHORS, type Anchor } from '../lib/emotion/anchors'
+import {
+  ANCHOR_DISPLAY,
+  EKMAN_ANCHORS,
+  NEGATIVE_ANCHORS,
+  POSITIVE_ANCHORS,
+  type Anchor,
+} from '../lib/emotion/anchors'
 // Imperative client the dashboard loads through (implemented in ./api with the
 // typed tRPC client). Results flow into the permissive normalizers below, so the
 // methods are widened to `unknown` at this boundary.
@@ -394,6 +400,52 @@ export function timelineBlocks(windows: WindowView[]): TimelineBlock[] {
     composition: compositionForScores(window.scores, window.dominant),
     intensity: window.intensity,
   }))
+}
+
+// Net emotional valence of a window in [-1, 1]: joy lifts, the negative anchors
+// (anger/disgust/fear/sadness, averaged) pull down. Neutral/surprise are treated
+// as flat. This is the single number the cross-conversation overview trends.
+export function windowValence(scores: Scores): number {
+  const positive = [...POSITIVE_ANCHORS].reduce((sum, key) => sum + clamp01(scores[key] ?? 0), 0)
+  const negativeKeys = [...NEGATIVE_ANCHORS]
+  const negative =
+    negativeKeys.reduce((sum, key) => sum + clamp01(scores[key] ?? 0), 0) / (negativeKeys.length || 1)
+  return Math.max(-1, Math.min(1, positive - negative))
+}
+
+// A window counts as a sharp shift when its strongest emotion move is medium or
+// high severity (see computeShift in lib/emotion/shifts).
+export function isSharpShift(window: WindowView): boolean {
+  const severity = window.shift.severity
+  return severity === 'medium' || severity === 'high'
+}
+
+export type OverviewPoint = { windowId: string; ordinal: number; valence: number; sharp: boolean }
+
+export type OverviewSeries = {
+  points: OverviewPoint[]
+  averageValence: number
+  sharpShiftCount: number
+}
+
+// Reduce a conversation's scored windows to a single valence arc plus the sharp
+// shift moments, for the cross-conversation overview.
+export function overviewSeries(windows: WindowView[]): OverviewSeries {
+  const points = windows
+    .filter((window) => SCORE_KEYS.some((key) => window.scores[key] != null))
+    .map((window) => ({
+      windowId: window.id,
+      ordinal: window.ordinal,
+      valence: windowValence(window.scores),
+      sharp: isSharpShift(window),
+    }))
+  const averageValence =
+    points.length === 0 ? 0 : points.reduce((sum, point) => sum + point.valence, 0) / points.length
+  return {
+    points,
+    averageValence,
+    sharpShiftCount: points.filter((point) => point.sharp).length,
+  }
 }
 
 export function runStateLabel(run: RunView | null, windows: WindowView[]): string {
