@@ -1,6 +1,6 @@
 // Canonical emotion dimensions for the whole app — the RoBERTa/Ekman anchors
 // decided in experiments/emotion-methods (harness_ax.ts). Single source of truth
-// shared by the scorer, the dashboard, the seed, and the eve agent tools.
+// shared by the scorer, the dashboard, and the eve agent tools.
 
 export const EKMAN_ANCHORS = [
   'anger',

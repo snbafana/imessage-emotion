@@ -35,7 +35,7 @@ export default function Sidebar({
 
       {error && <div className="sidebar-note error">{error}</div>}
       {!loading && conversations.length === 0 && !error && (
-        <div className="sidebar-note">No synced conversations yet.</div>
+        <div className="sidebar-note">No analyzed conversations yet — recompute one to see it here.</div>
       )}
 
       <div className="people">

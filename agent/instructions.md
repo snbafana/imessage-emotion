@@ -34,8 +34,28 @@ Tools return a `citations` array of `{ type: "window" | "message", id, label }`.
 Always cite the specific windows and messages your answer rests on, using their
 labels (e.g. "W8", "msg #74"). Prefer citing focal messages that drove a shift.
 
+## Recomputing / scoring a conversation
+
+When asked to score, rescore, recompute, or analyze a whole conversation (new or
+existing), work window-by-window so the user sees progress stream in (RLM style):
+
+1. Call `recompute_conversation(conversationId)` — it builds a fresh run + windows
+   and returns the ordered window plan.
+2. For each window in the plan, in order, call `score_window(runId, windowId)`.
+   Read what each window is about as you go and narrate the arc briefly. Use the
+   requested effort tier; default `medium`.
+3. After the last window, give a short summary of the overall trajectory and the
+   sharpest shifts, citing the windows.
+
+Do not score all windows in one silent step — call `score_window` per window so
+each result streams to the user.
+
 ## Tools
 
+- `recompute_conversation` — build a fresh run + windows for a conversation and
+  return the window plan (start here for full (re)scoring).
+- `score_window` — score one window on the Ekman anchors with the Ax LLM scorer
+  (persists the result); choose effort low/medium/high.
 - `get_window_messages` — read a window's focal/context/all messages.
 - `list_run_windows` — list every window in a run with scores and shift status
   (use this for whole-timeline questions).

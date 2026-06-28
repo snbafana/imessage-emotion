@@ -594,19 +594,3 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
-export type ChatTurn = {
-  role: 'user' | 'agent'
-  text: string
-  citation?: { label: string; delta: string; color: string }
-}
-
-// Legacy demo copy is kept only for the deferred chat panel, which is not mounted
-// by the real dashboard lane.
-export const CHAT: ChatTurn[] = [
-  { role: 'user', text: 'why did things recover after that March fight?' },
-  {
-    role: 'agent',
-    text: 'Demo chat is deferred until the non-session conversation API lands.',
-    citation: { label: 'Demo only', delta: '+0.00', color: EMOTIONS.neutral.ink },
-  },
-]
