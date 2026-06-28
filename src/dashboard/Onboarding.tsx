@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@base-ui/react/button'
 import { Separator } from '@base-ui/react/separator'
 import type { OnboardingStatus, SetupPermissionStatus, SyncStatus } from '../lib/api/types'
@@ -124,11 +124,6 @@ export default function Onboarding({
   useEffect(() => {
     if (!initialStatus) void refresh()
   }, [initialStatus, refresh])
-
-  const canContinue = useMemo(
-    () => Boolean(status?.ready && !syncError(status.sync)),
-    [status],
-  )
 
   async function syncMessages() {
     if (!api?.syncMessagesNow || !status) return
@@ -304,7 +299,10 @@ export default function Onboarding({
               <RecalcIcon />
               Start local sync
             </Button>
-            <Button className="setup-continue" disabled={!canContinue} onClick={onContinue}>
+            {/* Passthrough: Continue always proceeds to the dashboard regardless of
+                permission/sync state (AppView gates only on setupComplete). Mock data
+                via `pnpm seed:mock` makes the dashboard usable without Full Disk Access. */}
+            <Button className="setup-continue" onClick={onContinue}>
               {continueLabel}
             </Button>
           </div>
