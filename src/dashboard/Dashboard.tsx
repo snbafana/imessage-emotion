@@ -270,7 +270,9 @@ export default function Dashboard() {
                 ? `${formatDateRange(selectedConversation.firstMessageAt, selectedConversation.lastMessageAt)} · ${formatMessageCount(selectedConversation.messageCount)} messages · ${selectedConversation.participantSummary}`
                 : 'Sync messages to populate the dashboard'}
             </span>
-            {syncStatusLine && <span className="action-status">{syncStatusLine}</span>}
+            {syncStatusLine && (
+              <span className={`action-status${syncError ? ' error' : ''}`}>{syncStatusLine}</span>
+            )}
           </div>
           <div className="header-actions">
             <Button
