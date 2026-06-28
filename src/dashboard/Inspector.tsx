@@ -16,7 +16,10 @@ export default function Inspector() {
         </div>
         <div
           className="emotion-pill"
-          style={{ background: `${emotion.color}1a`, color: emotion.color }}
+          style={{
+            background: `color-mix(in oklch, ${emotion.color} 16%, #fff)`,
+            color: emotion.ink,
+          }}
         >
           <span>{emotion.label}</span>
           <span className="val">{w.score}</span>

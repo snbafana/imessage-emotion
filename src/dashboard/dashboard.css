@@ -278,7 +278,7 @@
 .panel-head .trend-note {
   font-weight: 500;
   font-size: 14px;
-  color: #2e9e8f;
+  color: oklch(0.52 0.12 182);
 }
 
 .window-toggle {

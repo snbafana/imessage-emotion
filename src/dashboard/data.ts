@@ -9,16 +9,49 @@ export type EmotionKey =
   | 'fear'
   | 'surprise'
 
-export const EMOTIONS: Record<EmotionKey, { label: string; color: string }> = {
-  joy: { label: 'Joy', color: '#E8A317' },
-  trust: { label: 'Trust', color: '#2E9E8F' },
-  sadness: { label: 'Sadness', color: '#3B6BD6' },
-  anger: { label: 'Anger', color: '#D6453B' },
-  fear: { label: 'Fear', color: '#7A5AD6' },
-  surprise: { label: 'Surprise', color: '#A8B81E' },
+// Harmonized OKLCH emotion wheel: hues spread evenly at consistent
+// lightness/chroma so any two emotions blend cleanly into gradients.
+// `color` = vivid (blocks, bars, dots); `ink` = darker, for text on white.
+export const EMOTIONS: Record<EmotionKey, { label: string; color: string; ink: string }> = {
+  joy: { label: 'Joy', color: 'oklch(0.79 0.15 78)', ink: 'oklch(0.55 0.13 78)' },
+  trust: { label: 'Trust', color: 'oklch(0.69 0.12 182)', ink: 'oklch(0.52 0.12 182)' },
+  sadness: { label: 'Sadness', color: 'oklch(0.61 0.13 252)', ink: 'oklch(0.5 0.13 252)' },
+  anger: { label: 'Anger', color: 'oklch(0.63 0.2 27)', ink: 'oklch(0.52 0.2 27)' },
+  fear: { label: 'Fear', color: 'oklch(0.58 0.17 300)', ink: 'oklch(0.5 0.16 300)' },
+  surprise: { label: 'Surprise', color: 'oklch(0.84 0.16 108)', ink: 'oklch(0.58 0.14 108)' },
 }
 
+// A single-emotion sample (used by sidebar sparklines).
 export type Block = { emotion: EmotionKey; intensity: number }
+
+// A window in the main timeline: an emotional composition + overall intensity.
+export type Composition = { emotion: EmotionKey; weight: number }[]
+export type TimelineBlock = { composition: Composition; intensity: number }
+
+const W2 = [0.66, 0.34]
+const W3 = [0.5, 0.3, 0.2]
+
+// Build a composition (dominant first) with sensible default weights.
+function mix(...emotions: EmotionKey[]): Composition {
+  const w = emotions.length === 3 ? W3 : emotions.length === 2 ? W2 : [1]
+  return emotions.map((emotion, i) => ({ emotion, weight: w[i] }))
+}
+
+// Vertical gradient reading bottom-up from the dominant emotion into its
+// secondary notes; stop positions follow each emotion's weight.
+export function gradientFor(composition: Composition): string {
+  const colors = composition.map((c) => EMOTIONS[c.emotion].color)
+  if (composition.length === 1) return colors[0]
+  const stops = [`${colors[0]} 0%`]
+  let cum = 0
+  composition.forEach((c, i) => {
+    const mid = cum + c.weight / 2
+    stops.push(`${colors[i]} ${Math.round(mid * 100)}%`)
+    cum += c.weight
+  })
+  stops.push(`${colors[colors.length - 1]} 100%`)
+  return `linear-gradient(to top, ${stops.join(', ')})`
+}
 
 export type Person = {
   id: string
@@ -48,7 +81,7 @@ export const PEOPLE: Person[] = [
     id: 'jordan',
     name: 'Jordan Reyes',
     initial: 'J',
-    avatar: '#3B6BD6',
+    avatar: 'oklch(0.61 0.13 252)',
     meta: '1,033 msgs · 2 yrs',
     trend: [
       { emotion: 'trust', intensity: 0.72 },
@@ -62,7 +95,7 @@ export const PEOPLE: Person[] = [
     id: 'dad',
     name: 'Dad',
     initial: 'D',
-    avatar: '#2E9E8F',
+    avatar: 'oklch(0.69 0.12 182)',
     meta: '5,902 msgs · 6 yrs',
     trend: [
       { emotion: 'joy', intensity: 0.54 },
@@ -76,7 +109,7 @@ export const PEOPLE: Person[] = [
     id: 'priya',
     name: 'Priya Anand',
     initial: 'P',
-    avatar: '#7A5AD6',
+    avatar: 'oklch(0.58 0.17 300)',
     meta: '744 msgs · 8 mo',
     trend: [
       { emotion: 'trust', intensity: 0.36 },
@@ -90,7 +123,7 @@ export const PEOPLE: Person[] = [
     id: 'sam',
     name: 'Sam Okafor',
     initial: 'S',
-    avatar: '#D6453B',
+    avatar: 'oklch(0.63 0.2 27)',
     meta: '1,610 msgs · 4 yrs',
     trend: [
       { emotion: 'trust', intensity: 0.45 },
@@ -102,36 +135,37 @@ export const PEOPLE: Person[] = [
   },
 ]
 
-// Active person's full timeline: tentative start → conflict spikes → warming finish.
-export const TIMELINE: Block[] = [
-  { emotion: 'fear', intensity: 0.39 },
-  { emotion: 'sadness', intensity: 0.49 },
-  { emotion: 'sadness', intensity: 0.36 },
-  { emotion: 'surprise', intensity: 0.58 },
-  { emotion: 'joy', intensity: 0.71 },
-  { emotion: 'trust', intensity: 0.61 },
-  { emotion: 'anger', intensity: 0.84 },
-  { emotion: 'anger', intensity: 0.77 },
-  { emotion: 'sadness', intensity: 0.55 },
-  { emotion: 'sadness', intensity: 0.45 },
-  { emotion: 'trust', intensity: 0.65 },
-  { emotion: 'joy', intensity: 0.74 },
-  { emotion: 'joy', intensity: 0.81 },
-  { emotion: 'trust', intensity: 0.68 },
-  { emotion: 'fear', intensity: 0.52 },
-  { emotion: 'anger', intensity: 0.9 }, // selected
-  { emotion: 'anger', intensity: 0.71 },
-  { emotion: 'sadness', intensity: 0.5 },
-  { emotion: 'trust', intensity: 0.59 },
-  { emotion: 'joy', intensity: 0.77 },
-  { emotion: 'trust', intensity: 0.85 },
-  { emotion: 'trust', intensity: 0.94 },
-  { emotion: 'joy', intensity: 0.97 },
-  { emotion: 'trust', intensity: 0.89 },
-  { emotion: 'trust', intensity: 0.95 },
-  { emotion: 'joy', intensity: 0.92 },
-  { emotion: 'trust', intensity: 1.0 },
-  { emotion: 'trust', intensity: 0.97 },
+// Active person's full timeline: tentative start → conflict spikes → warming
+// finish. Each window is an emotional composition (dominant first).
+export const TIMELINE: TimelineBlock[] = [
+  { intensity: 0.39, composition: mix('fear', 'sadness') },
+  { intensity: 0.49, composition: mix('sadness', 'fear') },
+  { intensity: 0.36, composition: mix('sadness', 'trust') },
+  { intensity: 0.58, composition: mix('surprise', 'joy') },
+  { intensity: 0.71, composition: mix('joy', 'trust') },
+  { intensity: 0.61, composition: mix('trust', 'joy') },
+  { intensity: 0.84, composition: mix('anger', 'sadness') },
+  { intensity: 0.77, composition: mix('anger', 'fear') },
+  { intensity: 0.55, composition: mix('sadness', 'anger') },
+  { intensity: 0.45, composition: mix('sadness', 'trust') },
+  { intensity: 0.65, composition: mix('trust', 'joy') },
+  { intensity: 0.74, composition: mix('joy', 'trust') },
+  { intensity: 0.81, composition: mix('joy', 'surprise') },
+  { intensity: 0.68, composition: mix('trust', 'joy') },
+  { intensity: 0.52, composition: mix('fear', 'anger') },
+  { intensity: 0.9, composition: mix('anger', 'sadness', 'fear') }, // selected
+  { intensity: 0.71, composition: mix('anger', 'sadness') },
+  { intensity: 0.5, composition: mix('sadness', 'trust') },
+  { intensity: 0.59, composition: mix('trust', 'joy') },
+  { intensity: 0.77, composition: mix('joy', 'trust') },
+  { intensity: 0.85, composition: mix('trust', 'joy') },
+  { intensity: 0.94, composition: mix('trust', 'joy') },
+  { intensity: 0.97, composition: mix('joy', 'trust') },
+  { intensity: 0.89, composition: mix('trust', 'joy') },
+  { intensity: 0.95, composition: mix('trust', 'joy') },
+  { intensity: 0.92, composition: mix('joy', 'surprise') },
+  { intensity: 1.0, composition: mix('trust', 'joy') },
+  { intensity: 0.97, composition: mix('trust', 'joy') },
 ]
 
 export const SELECTED_INDEX = 15
@@ -169,9 +203,9 @@ export const SELECTED_WINDOW = {
   reasoning:
     'A bid for attention went unmet, then Maya tied it to a recurring February pattern. Your reassurance was read as dismissal rather than repair — valence dropped sharply while arousal stayed high, the signature of unresolved conflict rather than sadness.',
   drivers: [
-    { label: 'Recurring grievance (Feb)', value: 82, color: '#D6453B' },
-    { label: 'Reassurance read as dismissal', value: 64, color: '#D6453B' },
-    { label: 'Unmet bid for attention', value: 55, color: '#E8A317' },
+    { label: 'Recurring grievance (Feb)', value: 82, color: EMOTIONS.anger.color },
+    { label: 'Reassurance read as dismissal', value: 64, color: EMOTIONS.anger.color },
+    { label: 'Unmet bid for attention', value: 55, color: EMOTIONS.joy.color },
   ],
 }
 
@@ -186,6 +220,6 @@ export const CHAT: ChatTurn[] = [
   {
     role: 'agent',
     text: 'The repair was concrete, not verbal. Within nine days you shifted from defending to planning — the trip thread on Mar 27 is the inflection. Trust climbed steadily for six weeks after, and the Feb grievance stopped recurring.',
-    citation: { label: 'Week of Mar 25 · trust', delta: '+0.39', color: '#2E9E8F' },
+    citation: { label: 'Week of Mar 25 · trust', delta: '+0.39', color: EMOTIONS.trust.ink },
   },
 ]

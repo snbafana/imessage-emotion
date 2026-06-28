@@ -1,5 +1,5 @@
 import { Tabs } from '@base-ui/react/tabs'
-import { AXIS_YEARS, EMOTIONS, TIMELINE, VALENCE_PATH } from './data'
+import { AXIS_YEARS, EMOTIONS, TIMELINE, VALENCE_PATH, gradientFor } from './data'
 
 const WINDOWS = ['Week', 'Month', 'Quarter']
 
@@ -42,9 +42,9 @@ export default function EmotionTimeline({
             <div
               key={i}
               className={`block${i === selected ? ' selected' : ''}`}
-              style={{ height: `${20 + b.intensity * 170}px`, background: EMOTIONS[b.emotion].color }}
+              style={{ height: `${20 + b.intensity * 170}px`, background: gradientFor(b.composition) }}
               onClick={() => onSelectBlock(i)}
-              title={EMOTIONS[b.emotion].label}
+              title={EMOTIONS[b.composition[0].emotion].label}
             />
           ))}
 
