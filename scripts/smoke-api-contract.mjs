@@ -24,6 +24,8 @@ const types = [
   'AnalysisWindow',
   'WindowMessage',
   'WindowResult',
+  'WindowShiftMetadata',
+  'RunSummaryMetadata',
   'SyncStatus',
   'ChatTurn',
 ]
@@ -81,6 +83,14 @@ assert(envSource.includes('ipcRenderer'), 'Window type must include ipcRenderer'
 assert(
   !envSource.includes("import('electron').IpcRenderer"),
   'Window type must not expose Electron IpcRenderer',
+)
+assert(
+  typeSource.includes('summary: RunSummaryMetadata | Record<string, unknown>'),
+  'RunSummary must expose parsed analysis_runs.summary_json metadata',
+)
+assert(
+  typeSource.includes('shift: WindowShiftMetadata | Record<string, unknown>'),
+  'AnalysisWindow must expose parsed windows.shift_json metadata',
 )
 
 console.log(`API contract smoke passed: ${methods.length} methods, ${types.length} shared types`)

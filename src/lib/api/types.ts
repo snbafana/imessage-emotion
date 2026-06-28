@@ -69,18 +69,92 @@ export interface RunSummary {
   windowCount: number
   startedAt: number
   completedAt: number | null
-  summary: JsonRecord
+  summary: RunSummaryMetadata | Record<string, unknown>
   error?: string | null
 }
 
+export type EmotionScores = Record<string, number>
+
 export interface WindowResult {
-  scores?: Record<string, number>
+  scores?: EmotionScores
   dominant?: string
   confidence?: number
   summary?: string
   evidenceMessageIds?: number[]
   method?: string
   [key: string]: unknown
+}
+
+export interface ShiftThresholds {
+  baselineWindowMin: number
+  baselineWindowMax: number
+  minorDelta: number
+  majorDelta: number
+}
+
+export type ShiftSeverity = 'major' | 'minor' | 'none'
+export type ShiftTrend = 'warmer' | 'tenser' | 'mixed' | 'stable'
+
+export interface EmotionDelta {
+  emotion: string
+  baseline: number
+  current: number
+  delta: number
+  direction: 'increase' | 'decrease' | 'flat'
+  severity: ShiftSeverity
+  label: string
+}
+
+export interface WindowShiftMetadata {
+  method: 'rolling-shift-v1'
+  status: 'pending_baseline' | 'stable' | 'minor_shift' | 'major_shift' | 'missing_scores'
+  windowId: number
+  ordinal: number
+  baselineWindowIds: number[]
+  baselineWindowCount: number
+  thresholds: ShiftThresholds
+  scores: EmotionScores
+  baselineScores: EmotionScores
+  deltas: Record<string, number>
+  strongest: EmotionDelta[]
+  strongestLabel: string | null
+  trend: ShiftTrend
+  trendScore: number
+  contextLabel: string | null
+}
+
+export interface DashboardShift {
+  windowId: number
+  ordinal: number
+  label: string
+  emotion: string
+  delta: number
+  severity: Exclude<ShiftSeverity, 'none'>
+  trend: ShiftTrend
+  contextLabel: string | null
+}
+
+export interface RunSummaryMetadata {
+  method: 'rolling-shift-summary-v1'
+  runId: number
+  status: string
+  isPending: boolean
+  isIncomplete: boolean
+  windowCount: number
+  scoredWindowCount: number
+  pendingWindowCount: number
+  shiftedWindowCount: number
+  majorShiftCount: number
+  minorShiftCount: number
+  stableWindowCount: number
+  strongestShift: DashboardShift | null
+  strongestTrend: ShiftTrend
+  counts: {
+    byTrend: Record<string, number>
+    byEmotion: Record<string, number>
+  }
+  thresholds: ShiftThresholds
+  updatedAt: string
 }
 
 export interface AnalysisWindow {
@@ -100,7 +174,7 @@ export interface AnalysisWindow {
   metadata: JsonRecord
   status: RunStatus
   result: WindowResult
-  shift: JsonRecord
+  shift: WindowShiftMetadata | Record<string, unknown>
   latencyMs: number | null
   error?: string | null
   createdAt: number

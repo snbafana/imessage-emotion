@@ -12,7 +12,7 @@
     "test": "vitest run",
     "smoke:api-contract": "node scripts/smoke-api-contract.mjs",
     "smoke:backend-read-api": "node scripts/smoke-backend-read-api.mjs",
-    "smoke:backend-read-api:real": "node scripts/smoke-backend-read-api-real.mjs"
+    "smoke:shift-summary": "tsx scripts/smoke-shift-summary.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -35,6 +35,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "typescript": "^5.2.2",
+    "tsx": "^4.20.5",
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5",
