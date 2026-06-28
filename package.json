@@ -9,7 +9,9 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest run",
-    "smoke:api-contract": "node scripts/smoke-api-contract.mjs"
+    "smoke:api-contract": "node scripts/smoke-api-contract.mjs",
+    "smoke:dashboard": "node scripts/smoke-dashboard.mjs",
+    "smoke:dashboard:real": "node scripts/smoke-dashboard-real.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

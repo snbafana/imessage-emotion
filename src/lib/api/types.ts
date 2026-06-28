@@ -14,6 +14,7 @@ export const API_CHANNELS = {
 export type ApiMethodName = keyof typeof API_CHANNELS
 
 export type SyncPhase = 'idle' | 'syncing' | 'error' | 'stopped'
+export type RunStatus = 'pending' | 'running' | 'completed' | 'scored' | 'failed' | 'error'
 
 export interface SyncStatus {
   messages: {
@@ -38,7 +39,7 @@ export interface ConversationSummary {
   messageCount: number
   firstMessageAt: number | null
   lastMessageAt: number | null
-  latestRun?: RunSummary
+  latestRun?: RunSummary | null
 }
 
 export interface ConversationDetail extends ConversationSummary {
@@ -54,11 +55,13 @@ export interface RunSummary {
   id: number
   conversationId: number
   methodKey: string
-  status: 'pending' | 'running' | 'completed' | 'error'
+  status: RunStatus
   windowCount: number
+  scoredWindowCount?: number
   startedAt: number
   completedAt: number | null
   summary: Record<string, unknown>
+  summaryJson?: Record<string, unknown>
   error?: string
 }
 
@@ -86,9 +89,11 @@ export interface AnalysisWindow {
   messageCount: number
   contextMessageCount: number
   focalMessageCount: number
-  status: 'pending' | 'running' | 'completed' | 'error'
+  status: RunStatus
   result: WindowResult
+  resultJson?: WindowResult
   shift: Record<string, unknown>
+  shiftJson?: Record<string, unknown>
   latencyMs: number | null
   error?: string
 }
