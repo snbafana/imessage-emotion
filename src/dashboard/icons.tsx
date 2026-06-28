@@ -44,6 +44,24 @@ export const SendIcon = ({ size = 17, color = '#fff' }: P) => (
   </svg>
 )
 
+export const ExpandIcon = ({ size = 16, color = '#3a3a3e' }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.1}>
+    <path d="M8 3H3v5" />
+    <path d="M3 3l7 7" />
+    <path d="M16 21h5v-5" />
+    <path d="M21 21l-7-7" />
+  </svg>
+)
+
+export const CollapseIcon = ({ size = 16, color = '#3a3a3e' }: P) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.1}>
+    <path d="M10 3v7H3" />
+    <path d="M3 10l7-7" />
+    <path d="M14 21v-7h7" />
+    <path d="M21 14l-7 7" />
+  </svg>
+)
+
 export const SettingsIcon = ({ size = 14, color = '#6b6b70' }: P) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.1}>
     <circle cx="12" cy="12" r="3" />
