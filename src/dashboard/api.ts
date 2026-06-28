@@ -11,7 +11,6 @@ export function getDashboardApi(): DashboardApi | null {
     listConversations: () => trpc.listConversations.query(),
     getConversation: (id) => trpc.getConversation.query(id),
     listRuns: (id) => trpc.listRuns.query(id),
-    createBaselineRun: (id) => trpc.createBaselineRun.mutate({ conversationId: id }),
     getRunWindows: (id) => trpc.getRunWindows.query(id),
     getWindowMessages: (id, slice) => trpc.getWindowMessages.query({ windowId: id, slice }),
     getSyncStatus: () => trpc.syncStatus.query(),

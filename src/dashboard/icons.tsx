@@ -30,12 +30,6 @@ export const BulbIcon = ({ size = 13, color = '#1f44ff' }: P) => (
   </svg>
 )
 
-export const ChevronIcon = ({ size = 13, color = '#9a9aa0' }: P) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.2}>
-    <path d="M9 18l6-6-6-6" />
-  </svg>
-)
-
 export const ArrowLeftIcon = ({ size = 14, color = '#0a0a0b' }: P) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.2}>
     <path d="M19 12H5" />

@@ -149,11 +149,3 @@ export function getRunWindows(db: AppDatabase, runId: number): AnalysisWindow[] 
     .all(runId) as WindowRow[]
   return rows.map(mapWindow)
 }
-
-export function getRunWindow(
-  db: AppDatabase,
-  runId: number,
-  windowId: number,
-): AnalysisWindow | null {
-  return getRunWindows(db, runId).find((window) => window.id === windowId) ?? null
-}

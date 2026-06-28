@@ -17,7 +17,6 @@ export type DashboardApi = {
   listConversations(): Promise<unknown>
   getConversation(conversationId: number): Promise<unknown>
   listRuns(conversationId: number): Promise<unknown>
-  createBaselineRun(conversationId: number): Promise<unknown>
   getRunWindows(runId: number): Promise<unknown>
   getWindowMessages(windowId: number, slice: WindowMessageSlice): Promise<unknown>
   getSyncStatus(): Promise<ApiSyncStatus>
@@ -212,15 +211,6 @@ export type TimelineBlock = {
   window: WindowView
   composition: { emotion: EmotionKey; weight: number }[]
   intensity: number
-}
-
-export type DashboardSmokeHtmlInput = {
-  conversations: ConversationView[]
-  run: RunView | null
-  windows: WindowView[]
-  selectedWindow: WindowView | null
-  contextMessages: MessageView[]
-  focalMessages: MessageView[]
 }
 
 type JsonRecord = Record<string, unknown>
@@ -426,32 +416,6 @@ export function formatDateRange(first: number | null, last: number | null): stri
   if (first == null) return `through ${formatMonthYear(last)}`
   if (last == null) return `from ${formatMonthYear(first)}`
   return `${formatMonthYear(first)} - ${formatMonthYear(last)}`
-}
-
-export function renderDashboardSmokeHtml(input: DashboardSmokeHtmlInput): string {
-  const selected = input.selectedWindow
-  const status = runStateLabel(input.run, input.windows)
-  const context = input.contextMessages.map((message) => escapeHtml(message.text)).join('')
-  const focal = input.focalMessages.map((message) => escapeHtml(message.text)).join('')
-  const windows = input.windows
-    .map((window) => `<button class="block">${escapeHtml(window.label)} ${escapeHtml(window.status)}</button>`)
-    .join('')
-  const conversations = input.conversations
-    .map((conversation) => `<button class="person">${escapeHtml(conversation.title)}</button>`)
-    .join('')
-
-  return [
-    '<main class="dashboard-smoke">',
-    `<aside>${conversations}</aside>`,
-    `<section class="timeline"><h1>${escapeHtml(status)}</h1>${windows || escapeHtml(status)}</section>`,
-    '<section class="inspector">',
-    `<h2>${escapeHtml(selected?.label ?? status)}</h2>`,
-    `<h3>Old context</h3><div>${context}</div>`,
-    `<h3>New focal</h3><div>${focal}</div>`,
-    `<p>${escapeHtml(selected?.summary ?? status)}</p>`,
-    '</section>',
-    '</main>',
-  ].join('')
 }
 
 function normalizeRunState(status: string | null | undefined): RunState {
@@ -669,13 +633,4 @@ function colorForId(id: string): string {
     'oklch(0.63 0.2 27)',
   ]
   return palette[hash % palette.length]
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
 }
