@@ -1,3 +1,7 @@
+import type { PrivacySafeCounts } from '../db/schema'
+
+export type { PrivacySafeCounts }
+
 export type JsonRecord = Record<string, unknown>
 export type SyncPhase = 'idle' | 'syncing' | 'error' | 'stopped'
 
@@ -22,15 +26,6 @@ export interface SetupPermissionStatus {
   actionLabel: string
   settingsTarget: 'full_disk_access' | 'contacts'
   error?: string
-}
-
-export interface PrivacySafeCounts {
-  conversations: number
-  messages: number
-  contacts: number
-  resolvedContacts: number
-  lastMessageAt: number | null
-  lastImportedAt: number | null
 }
 
 export interface SyncStatus {
@@ -253,12 +248,3 @@ export interface SaveWindowLabelInput {
   pivotalMessageRefs?: number[]
   notes?: string | null
 }
-
-export interface AskConversationInput {
-  conversationId: number
-  question: string
-  runId: number
-  windowId: number
-}
-
-export type ConversationChatResponse = import('../chat/answer').ConversationChatResponse

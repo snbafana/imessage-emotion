@@ -15,11 +15,6 @@ export const EKMAN_ANCHORS = [
 export type Anchor = (typeof EKMAN_ANCHORS)[number]
 export type AnchorScores = Record<Anchor, number>
 
-// Valence direction for the high-fidelity line: joy lifts; anger/disgust/fear/
-// sadness drop; neutral/surprise are ~flat.
-export const POSITIVE_ANCHORS = new Set<Anchor>(['joy'])
-export const NEGATIVE_ANCHORS = new Set<Anchor>(['anger', 'disgust', 'fear', 'sadness'])
-
 // Display palette (OKLCH) — `color` vivid for blocks/bars, `ink` darker for text.
 export const ANCHOR_DISPLAY: Record<Anchor, { label: string; color: string; ink: string }> = {
   anger: { label: 'Anger', color: 'oklch(0.63 0.20 27)', ink: 'oklch(0.52 0.20 27)' },

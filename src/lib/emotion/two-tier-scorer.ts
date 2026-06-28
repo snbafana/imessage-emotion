@@ -9,7 +9,7 @@ import { triageRunWithRoberta, type TriageProgress, type TriagedWindow, type Tri
 //   Tier 2 (deep-read): the top-K highest-shift windows are re-scored in parallel
 //   by a stronger model (gpt-5-mini) that sees the window plus its neighbors
 //   across time, and saves a rationale. A deterministic host fan-out — reliable
-//   and fast — rather than an RLM actor loop (see rlm-scorer.ts for that variant).
+//   and fast — rather than an RLM actor loop (see experiments/rlm/rlm-scorer.ts for that variant).
 
 export type TwoTierProgress = {
   onTriage?: TriageProgress

@@ -1,7 +1,7 @@
 import { getDb } from '../../src/lib/db/connection'
 import { createAxRun } from '../../src/lib/emotion/run-analysis'
 import { getRunWindows } from '../../src/lib/api/runs'
-import { scoreRunWithRlm } from '../../src/lib/emotion/rlm-scorer'
+import { scoreRunWithRlm } from './rlm-scorer'
 
 // Stress the RLM scorer: manufacture a many-window run, score it with one ax RLM
 // agent fanning out llmQuery, and verify coverage.

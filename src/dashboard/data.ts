@@ -1,12 +1,8 @@
 import type {
   AnalysisRunOptions as ApiAnalysisRunOptions,
-  AnalysisWindow as ApiAnalysisWindow,
   ContactSearchHit as ApiContactSearchHit,
-  ConversationSummary as ApiConversationSummary,
   OnboardingStatus,
-  RunSummary as ApiRunSummary,
   SyncStatus as ApiSyncStatus,
-  WindowMessage as ApiWindowMessage,
   WindowMessageSlice,
 } from '../lib/api/types'
 import { ANCHOR_DISPLAY, EKMAN_ANCHORS, type Anchor } from '../lib/emotion/anchors'
@@ -41,99 +37,6 @@ export type Scores = Partial<Record<ScoreKey, number>>
 export type RunState = 'no-run' | 'pending' | 'scored' | 'failed' | 'unknown'
 export type RunScale = 'granular' | 'large' | 'standard' | 'custom'
 export type MessageSlice = WindowMessageSlice
-
-export type ConversationSummary = Partial<ApiConversationSummary> & {
-  id: string | number
-  title?: string
-  displayName?: string
-  display_name?: string
-  participantSummary?: string
-  participant_summary?: string
-  messageCount?: number
-  message_count?: number
-  firstMessageAt?: number | string | null
-  first_message_at?: number | string | null
-  lastMessageAt?: number | string | null
-  last_message_at?: number | string | null
-  latestRun?: RunSummary | null
-  latest_run?: RunSummary | null
-}
-
-export type RunSummary = Partial<ApiRunSummary> & {
-  id: string | number
-  conversationId?: string | number
-  conversation_id?: string | number
-  methodKey?: string
-  method_key?: string
-  status?: string
-  startedAt?: number | string | null
-  started_at?: number | string | null
-  completedAt?: number | string | null
-  completed_at?: number | string | null
-  error?: string | null
-  summaryJson?: unknown
-  summary_json?: unknown
-  windowConfig?: unknown
-  window_config?: unknown
-  window_config_json?: unknown
-  scorerConfig?: unknown
-  scorer_config?: unknown
-  scorer_config_json?: unknown
-  windowCount?: number
-  window_count?: number
-  scoredWindowCount?: number
-  scored_window_count?: number
-}
-
-export type AnalysisWindow = Partial<ApiAnalysisWindow> & {
-  id: string | number
-  runId?: string | number
-  run_id?: string | number
-  ordinal?: number
-  startOrdinal?: number
-  start_ordinal?: number
-  endOrdinal?: number
-  end_ordinal?: number
-  contextStartOrdinal?: number | null
-  context_start_ordinal?: number | null
-  contextEndOrdinal?: number | null
-  context_end_ordinal?: number | null
-  focalStartOrdinal?: number
-  focal_start_ordinal?: number
-  focalEndOrdinal?: number
-  focal_end_ordinal?: number
-  messageCount?: number
-  message_count?: number
-  contextMessageCount?: number
-  context_message_count?: number
-  focalMessageCount?: number
-  focal_message_count?: number
-  startSentAt?: number | string | null
-  start_sent_at?: number | string | null
-  endSentAt?: number | string | null
-  end_sent_at?: number | string | null
-  resultJson?: unknown
-  result_json?: unknown
-  shiftJson?: unknown
-  shift_json?: unknown
-  status?: string
-  error?: string | null
-}
-
-export type WindowMessage = Partial<ApiWindowMessage> & {
-  id: string | number
-  conversationOrdinal?: number
-  conversation_ordinal?: number
-  text?: string | null
-  sentAt?: number | string | null
-  sent_at?: number | string | null
-  isFromMe?: boolean | number
-  is_from_me?: boolean | number
-  senderName?: string | null
-  sender_name?: string | null
-  displayName?: string | null
-  display_name?: string | null
-}
 
 export type ConversationView = {
   id: string
