@@ -9,7 +9,9 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest run",
-    "smoke:api-contract": "node scripts/smoke-api-contract.mjs"
+    "smoke:api-contract": "node scripts/smoke-api-contract.mjs",
+    "smoke:shift-summary": "tsx scripts/smoke-shift-summary.mjs",
+    "smoke:shift-summary:real": "tsx scripts/smoke-shift-summary-real.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -31,6 +33,7 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "typescript": "^5.2.2",
+    "tsx": "^4.20.5",
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5",

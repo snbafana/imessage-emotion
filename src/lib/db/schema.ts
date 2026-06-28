@@ -99,15 +99,29 @@ export function migrate(db: AppDatabase): void {
 
     CREATE TABLE IF NOT EXISTS windows (
       id INTEGER PRIMARY KEY,
+      run_id INTEGER REFERENCES analysis_runs(id) ON DELETE CASCADE,
       window_config_id INTEGER NOT NULL REFERENCES window_configs(id) ON DELETE CASCADE,
       conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      ordinal INTEGER,
       start_ordinal INTEGER NOT NULL,
       end_ordinal INTEGER NOT NULL,
+      context_start_ordinal INTEGER,
+      context_end_ordinal INTEGER,
+      focal_start_ordinal INTEGER,
+      focal_end_ordinal INTEGER,
       start_message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
       end_message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
       start_at INTEGER NOT NULL,
       end_at INTEGER NOT NULL,
       message_count INTEGER NOT NULL,
+      context_message_count INTEGER NOT NULL DEFAULT 0,
+      focal_message_count INTEGER,
+      window_metadata_json TEXT NOT NULL DEFAULT '{}',
+      result_json TEXT NOT NULL DEFAULT '{}',
+      shift_json TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'pending',
+      latency_ms INTEGER,
+      error TEXT,
       deterministic_key TEXT NOT NULL UNIQUE,
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
       CHECK (start_ordinal <= end_ordinal)
@@ -126,11 +140,18 @@ export function migrate(db: AppDatabase): void {
 
     CREATE TABLE IF NOT EXISTS analysis_runs (
       id INTEGER PRIMARY KEY,
-      scorer_config_id INTEGER NOT NULL REFERENCES scorer_configs(id) ON DELETE RESTRICT,
+      conversation_id INTEGER REFERENCES conversations(id) ON DELETE CASCADE,
+      method_key TEXT NOT NULL DEFAULT 'legacy',
+      window_config_json TEXT NOT NULL DEFAULT '{}',
+      context_config_json TEXT NOT NULL DEFAULT '{}',
+      scorer_config_json TEXT NOT NULL DEFAULT '{}',
+      summary_json TEXT NOT NULL DEFAULT '{}',
+      scorer_config_id INTEGER REFERENCES scorer_configs(id) ON DELETE RESTRICT,
       status TEXT NOT NULL,
       started_at INTEGER NOT NULL,
       completed_at INTEGER,
-      notes TEXT
+      notes TEXT,
+      error TEXT
     );
 
     CREATE TABLE IF NOT EXISTS run_windows (
@@ -160,4 +181,83 @@ export function migrate(db: AppDatabase): void {
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
     );
   `)
+  addRunOwnedAnalysisColumns(db)
+}
+
+function addRunOwnedAnalysisColumns(db: AppDatabase): void {
+  const columns = (table: string) =>
+    new Set(
+      (
+        db
+          .prepare(`PRAGMA table_info(${table})`)
+          .all() as Array<{ name: string }>
+      ).map((column) => column.name),
+    )
+
+  const analysisRunColumns = columns('analysis_runs')
+  addColumnIfMissing(
+    db,
+    analysisRunColumns,
+    'analysis_runs',
+    'conversation_id',
+    'INTEGER REFERENCES conversations(id) ON DELETE CASCADE',
+  )
+  addColumnIfMissing(db, analysisRunColumns, 'analysis_runs', 'method_key', "TEXT NOT NULL DEFAULT 'legacy'")
+  addColumnIfMissing(
+    db,
+    analysisRunColumns,
+    'analysis_runs',
+    'window_config_json',
+    "TEXT NOT NULL DEFAULT '{}'",
+  )
+  addColumnIfMissing(
+    db,
+    analysisRunColumns,
+    'analysis_runs',
+    'context_config_json',
+    "TEXT NOT NULL DEFAULT '{}'",
+  )
+  addColumnIfMissing(
+    db,
+    analysisRunColumns,
+    'analysis_runs',
+    'scorer_config_json',
+    "TEXT NOT NULL DEFAULT '{}'",
+  )
+  addColumnIfMissing(
+    db,
+    analysisRunColumns,
+    'analysis_runs',
+    'summary_json',
+    "TEXT NOT NULL DEFAULT '{}'",
+  )
+  addColumnIfMissing(db, analysisRunColumns, 'analysis_runs', 'error', 'TEXT')
+
+  const windowColumns = columns('windows')
+  addColumnIfMissing(db, windowColumns, 'windows', 'run_id', 'INTEGER REFERENCES analysis_runs(id) ON DELETE CASCADE')
+  addColumnIfMissing(db, windowColumns, 'windows', 'ordinal', 'INTEGER')
+  addColumnIfMissing(db, windowColumns, 'windows', 'context_start_ordinal', 'INTEGER')
+  addColumnIfMissing(db, windowColumns, 'windows', 'context_end_ordinal', 'INTEGER')
+  addColumnIfMissing(db, windowColumns, 'windows', 'focal_start_ordinal', 'INTEGER')
+  addColumnIfMissing(db, windowColumns, 'windows', 'focal_end_ordinal', 'INTEGER')
+  addColumnIfMissing(db, windowColumns, 'windows', 'context_message_count', 'INTEGER NOT NULL DEFAULT 0')
+  addColumnIfMissing(db, windowColumns, 'windows', 'focal_message_count', 'INTEGER')
+  addColumnIfMissing(db, windowColumns, 'windows', 'window_metadata_json', "TEXT NOT NULL DEFAULT '{}'")
+  addColumnIfMissing(db, windowColumns, 'windows', 'result_json', "TEXT NOT NULL DEFAULT '{}'")
+  addColumnIfMissing(db, windowColumns, 'windows', 'shift_json', "TEXT NOT NULL DEFAULT '{}'")
+  addColumnIfMissing(db, windowColumns, 'windows', 'status', "TEXT NOT NULL DEFAULT 'pending'")
+  addColumnIfMissing(db, windowColumns, 'windows', 'latency_ms', 'INTEGER')
+  addColumnIfMissing(db, windowColumns, 'windows', 'error', 'TEXT')
+}
+
+function addColumnIfMissing(
+  db: AppDatabase,
+  columns: Set<string>,
+  table: string,
+  column: string,
+  definition: string,
+): void {
+  if (columns.has(column)) return
+  db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  columns.add(column)
 }
