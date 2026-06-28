@@ -42,6 +42,7 @@ function scoreY(value: number): number {
 // Smooth Catmull-Rom path through per-window scores in a fixed non-scaling
 // viewBox. This keeps sparse large-window runs and dense granular runs readable.
 function scorePath(points: [number, number][]): string {
+  if (points.length === 0) return ''
   if (points.length === 1) return `M${points[0][0]},${points[0][1]} L1000,${points[0][1]}`
   let d = `M${points[0][0]},${points[0][1]}`
   for (let i = 0; i < points.length - 1; i += 1) {
