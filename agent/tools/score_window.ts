@@ -25,7 +25,8 @@ const scoreWindowWithAx = ax(`
   sadness:number "sadness score 0..1",
   surprise:number "surprise score 0..1",
   confidence:number "confidence 0..1",
-  stateLabel:string "short non-identifying state label"
+  stateLabel:string "short non-identifying state label",
+  rationale:string "one or two sentences: why this dominant emotion, citing what shifted vs the baseline (no names, no verbatim quotes)"
 `)
 
 // Effort tier -> model + token budget (latency/quality trade-off).
@@ -100,13 +101,15 @@ export default defineTool({
     const dom = dominant(scores)
     const confidence = clamp(out.confidence)
     const stateLabel = typeof out.stateLabel === 'string' ? out.stateLabel.slice(0, 80) : null
+    const rationale = typeof out.rationale === 'string' ? out.rationale.slice(0, 280) : null
 
     // Persist so the recompute takes effect on the timeline.
     const resultJson = JSON.stringify({
       scores,
       dominant: dom,
       confidence,
-      summary: stateLabel ?? `${dom} leading`,
+      summary: rationale ?? stateLabel ?? `${dom} leading`,
+      rationale,
       method: `ax-${tier.model}`,
     })
     db.prepare('UPDATE windows SET result_json = ?, status = ?, latency_ms = ? WHERE id = ?').run(
@@ -125,6 +128,7 @@ export default defineTool({
       dominant: dom,
       confidence,
       stateLabel,
+      rationale,
       persisted: true,
       citations: [{ type: 'window' as const, id: windowId, label: `W${target.ordinal}` }],
     }

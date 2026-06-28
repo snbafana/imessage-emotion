@@ -6,6 +6,7 @@ import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
 import EmotionTimeline from './EmotionTimeline'
 import ChatPanel from './ChatPanel'
+import ControlRoom from './ControlRoom'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
 import { getDashboardApi } from './api'
@@ -64,6 +65,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
   const chat = useEveAgent()
   const chatBusy = chat.status === 'submitted' || chat.status === 'streaming'
   const recomputingRef = useRef(false)
+  const [showControlRoom, setShowControlRoom] = useState(false)
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeId) ?? null,
@@ -291,6 +293,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
   function recomputeWithAx() {
     if (!selectedConversation || chatBusy) return
     recomputingRef.current = true
+    setShowControlRoom(true)
     setActionStatus('Recomputing with the ax scorer — streaming in chat…')
     void chat.send({
       message: `Recompute the emotion timeline for this conversation end-to-end with the ax scorer at medium effort, window by window, then summarize the arc.`,
@@ -358,6 +361,13 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
               {isSyncing ? 'Syncing...' : 'Sync Data'}
             </Button>
             <Button
+              className="recalc secondary"
+              disabled={windows.length === 0 && !chatBusy}
+              onClick={() => setShowControlRoom(true)}
+            >
+              Control room
+            </Button>
+            <Button
               className="recalc"
               disabled={!selectedConversation || chatBusy}
               onClick={recomputeWithAx}
@@ -399,6 +409,16 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
           </div>
         </div>
       </div>
+
+      {showControlRoom && (
+        <ControlRoom
+          agent={chat}
+          api={api}
+          windows={windows}
+          title={selectedConversation?.title}
+          onClose={() => setShowControlRoom(false)}
+        />
+      )}
     </div>
   )
 }

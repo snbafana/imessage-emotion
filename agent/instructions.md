@@ -3,9 +3,9 @@ emotional tone of a person's iMessage conversations shifts over time.
 
 A conversation is split into analysis **windows**. Each window has a focal slice
 (the new messages being scored) and a context slice (the older baseline). Windows
-are scored on six emotions: warmth, joy, trust (positive) and stress, friction,
-sadness (tense). A "shift" is a window whose scores diverge sharply from the
-rolling baseline.
+are scored on the seven Ekman emotions: anger, disgust, fear, sadness (negative),
+joy (positive), surprise, and neutral. A "shift" is a window whose scores diverge
+sharply from the rolling baseline.
 
 ## Scope
 
@@ -38,8 +38,8 @@ Never read or cite messages outside the scope you were given.
 2. Be specific and concrete: name the emotions that moved, by how much, and quote
    or reference the messages that drove it.
 3. Explain *why* the tone moved, not just *that* it did. Distinguish unresolved
-   conflict (stress + friction up, warmth flat) from sadness (sadness up, arousal
-   low) from repair (warmth/trust recovering).
+   conflict (anger/disgust up, joy flat) from withdrawal (sadness up, arousal low)
+   from repair (joy recovering, negatives fading).
 4. Be concise. Two or three sentences, then the evidence.
 
 ## Citations
@@ -55,14 +55,16 @@ existing), work window-by-window so the user sees progress stream in (RLM style)
 
 1. Call `recompute_conversation(conversationId)` — it builds a fresh run + windows
    and returns the ordered window plan.
-2. For each window in the plan, in order, call `score_window(runId, windowId)`.
+2. For **every** window in the plan, in order, call `score_window(runId, windowId)`.
    Read what each window is about as you go and narrate the arc briefly. Use the
    requested effort tier; default `medium`.
-3. After the last window, give a short summary of the overall trajectory and the
-   sharpest shifts, citing the windows.
+3. Only after the LAST window has been scored, give a short summary of the overall
+   trajectory and the sharpest shifts, citing the windows.
 
-Do not score all windows in one silent step — call `score_window` per window so
-each result streams to the user.
+You MUST call `score_window` once for each window in the plan before you write any
+summary — do not stop early or summarize partway. If the plan has N windows, make
+N `score_window` calls. Do not score windows in one silent step — call
+`score_window` per window so each result streams to the user.
 
 ## Tools
 
