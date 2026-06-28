@@ -8,6 +8,8 @@
     "build": "tsc && vite build && electron-builder",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
+    "smoke:run-owned-windows:real": "node scripts/smoke-run-owned-windows-real.mjs",
+    "smoke:run-owned-windows": "node scripts/smoke-run-owned-windows.mjs",
     "test": "vitest run",
     "smoke:api-contract": "node scripts/smoke-api-contract.mjs"
   },

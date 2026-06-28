@@ -1,10 +1,13 @@
 import type { AppDatabase } from '../db/schema'
 
-export interface WindowConfigInput {
-  name: string
-  messageCount: number
+export type WindowMode = 'absolute-message-count' | 'comparative-message-count'
+
+export interface RunWindowConfig {
+  mode: WindowMode
+  contextMessages: number
+  focalMessages: number
   stride: number
-  minTailMessages: number
+  minFocalMessages: number
 }
 
 export interface WindowRange {
@@ -12,28 +15,18 @@ export interface WindowRange {
   endOrdinal: number
 }
 
-type MessageBoundary = {
-  id: number
-  sent_at: number
+export interface RunWindowRange extends WindowRange {
+  ordinal: number
+  contextStartOrdinal: number | null
+  contextEndOrdinal: number | null
+  focalStartOrdinal: number
+  focalEndOrdinal: number
+  contextMessageCount: number
+  focalMessageCount: number
 }
 
-export function upsertWindowConfig(db: AppDatabase, input: WindowConfigInput): number {
-  validateWindowConfig(input.messageCount, input.stride, input.minTailMessages)
-  db.prepare(
-    `
-    INSERT INTO window_configs (name, message_count, stride, min_tail_messages)
-    VALUES (?, ?, ?, ?)
-    ON CONFLICT(name) DO UPDATE SET
-      message_count = excluded.message_count,
-      stride = excluded.stride,
-      min_tail_messages = excluded.min_tail_messages
-  `,
-  ).run(input.name, input.messageCount, input.stride, input.minTailMessages)
-
-  const row = db
-    .prepare('SELECT id FROM window_configs WHERE name = ?')
-    .get(input.name) as { id: number }
-  return row.id
+type MessageBoundary = {
+  id: number
 }
 
 export function planWindowRanges(
@@ -42,6 +35,7 @@ export function planWindowRanges(
   stride: number,
   minTailMessages: number,
 ): WindowRange[] {
+  validatePositiveInteger('lastOrdinal', lastOrdinal, true)
   validateWindowConfig(messageCount, stride, minTailMessages)
   if (lastOrdinal < minTailMessages) return []
 
@@ -63,14 +57,172 @@ export function planWindowRanges(
   return ranges
 }
 
+export function planRunWindowRanges(lastOrdinal: number, config: RunWindowConfig): RunWindowRange[] {
+  validateRunWindowConfig(config)
+  if (config.mode === 'absolute-message-count') {
+    return planWindowRanges(
+      lastOrdinal,
+      config.focalMessages,
+      config.stride,
+      config.minFocalMessages,
+    ).map((range, index) => ({
+      ...range,
+      ordinal: index + 1,
+      contextStartOrdinal: null,
+      contextEndOrdinal: null,
+      focalStartOrdinal: range.startOrdinal,
+      focalEndOrdinal: range.endOrdinal,
+      contextMessageCount: 0,
+      focalMessageCount: range.endOrdinal - range.startOrdinal + 1,
+    }))
+  }
+
+  if (lastOrdinal < config.contextMessages + config.minFocalMessages) return []
+
+  const ranges: RunWindowRange[] = []
+  for (
+    let focalStartOrdinal = config.contextMessages + 1;
+    focalStartOrdinal <= lastOrdinal;
+    focalStartOrdinal += config.stride
+  ) {
+    const fullFocalEndOrdinal = focalStartOrdinal + config.focalMessages - 1
+    const focalEndOrdinal = Math.min(fullFocalEndOrdinal, lastOrdinal)
+    const focalMessageCount = focalEndOrdinal - focalStartOrdinal + 1
+    if (focalMessageCount < config.minFocalMessages) break
+
+    const contextStartOrdinal = focalStartOrdinal - config.contextMessages
+    const contextEndOrdinal = focalStartOrdinal - 1
+    ranges.push({
+      ordinal: ranges.length + 1,
+      startOrdinal: contextStartOrdinal,
+      endOrdinal: focalEndOrdinal,
+      contextStartOrdinal,
+      contextEndOrdinal,
+      focalStartOrdinal,
+      focalEndOrdinal,
+      contextMessageCount: config.contextMessages,
+      focalMessageCount,
+    })
+
+    if (fullFocalEndOrdinal >= lastOrdinal) break
+  }
+  return ranges
+}
+
+export function createWindowsForRun(
+  db: AppDatabase,
+  runId: number,
+  conversationId: number,
+  config: RunWindowConfig,
+): number[] {
+  return db.transaction(() => {
+    const lastOrdinal = getLastConversationOrdinal(db, conversationId)
+    const ranges = planRunWindowRanges(lastOrdinal, config)
+    const boundaryStatement = db.prepare(
+      `
+      SELECT id
+      FROM messages
+      WHERE conversation_id = ? AND conversation_ordinal = ?
+    `,
+    )
+    const insertWindow = db.prepare(
+      `
+      INSERT INTO windows (
+        run_id,
+        conversation_id,
+        ordinal,
+        start_ordinal,
+        end_ordinal,
+        context_start_ordinal,
+        context_end_ordinal,
+        focal_start_ordinal,
+        focal_end_ordinal,
+        start_message_id,
+        end_message_id,
+        message_count,
+        context_message_count,
+        focal_message_count,
+        window_metadata_json,
+        status
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+    `,
+    )
+
+    const windowIds: number[] = []
+    for (const range of ranges) {
+      const start = boundaryStatement.get(conversationId, range.startOrdinal) as
+        | MessageBoundary
+        | undefined
+      const end = boundaryStatement.get(conversationId, range.endOrdinal) as
+        | MessageBoundary
+        | undefined
+      if (!start || !end) {
+        throw new Error(
+          `Missing boundary message for conversation ${conversationId} window ${range.ordinal}`,
+        )
+      }
+
+      const metadata = {
+        mode: config.mode,
+        contextMessages: config.contextMessages,
+        focalMessages: config.focalMessages,
+        stride: config.stride,
+        minFocalMessages: config.minFocalMessages,
+      }
+      const inserted = insertWindow.run(
+        runId,
+        conversationId,
+        range.ordinal,
+        range.startOrdinal,
+        range.endOrdinal,
+        range.contextStartOrdinal,
+        range.contextEndOrdinal,
+        range.focalStartOrdinal,
+        range.focalEndOrdinal,
+        start.id,
+        end.id,
+        range.endOrdinal - range.startOrdinal + 1,
+        range.contextMessageCount,
+        range.focalMessageCount,
+        JSON.stringify(metadata),
+      )
+      windowIds.push(Number(inserted.lastInsertRowid))
+    }
+    return windowIds
+  })()
+}
+
+export function validateRunWindowConfig(config: RunWindowConfig): void {
+  if (config.mode !== 'absolute-message-count' && config.mode !== 'comparative-message-count') {
+    throw new RangeError(`Unsupported window mode: ${config.mode}`)
+  }
+  validatePositiveInteger('contextMessages', config.contextMessages, config.mode === 'absolute-message-count')
+  validateWindowConfig(config.focalMessages, config.stride, config.minFocalMessages)
+  if (config.mode === 'comparative-message-count' && config.contextMessages <= 0) {
+    throw new RangeError('contextMessages must be positive for comparative-message-count')
+  }
+}
+
+function getLastConversationOrdinal(db: AppDatabase, conversationId: number): number {
+  const row = db
+    .prepare(
+      `
+      SELECT MAX(conversation_ordinal) AS last_ordinal
+      FROM messages
+      WHERE conversation_id = ?
+    `,
+    )
+    .get(conversationId) as { last_ordinal: number | null }
+  return row.last_ordinal ?? 0
+}
+
 function validateWindowConfig(
   messageCount: number,
   stride: number,
   minTailMessages: number,
 ): void {
-  if (!Number.isInteger(messageCount) || messageCount <= 0) {
-    throw new RangeError('messageCount must be a positive integer')
-  }
+  validatePositiveInteger('messageCount', messageCount)
   if (!Number.isInteger(stride) || stride <= 0 || stride > messageCount) {
     throw new RangeError('stride must be a positive integer no larger than messageCount')
   }
@@ -79,159 +231,9 @@ function validateWindowConfig(
   }
 }
 
-export function ensureWindowsForConversation(
-  db: AppDatabase,
-  conversationId: number,
-  windowConfigId: number,
-): number[] {
-  return db.transaction(() => {
-    const config = db
-      .prepare(
-        `
-        SELECT message_count, stride, min_tail_messages
-        FROM window_configs
-        WHERE id = ?
-      `,
-      )
-      .get(windowConfigId) as
-      | { message_count: number; stride: number; min_tail_messages: number }
-      | undefined
-    if (!config) throw new Error(`Missing window config ${windowConfigId}`)
-
-    const last = db
-      .prepare(
-        `
-        SELECT MAX(conversation_ordinal) AS last_ordinal
-        FROM messages
-        WHERE conversation_id = ?
-      `,
-      )
-      .get(conversationId) as { last_ordinal: number | null }
-    const ranges = planWindowRanges(
-      last.last_ordinal ?? 0,
-      config.message_count,
-      config.stride,
-      config.min_tail_messages,
-    )
-
-    const boundaryStatement = db.prepare(
-      `
-      SELECT id, sent_at
-      FROM messages
-      WHERE conversation_id = ? AND conversation_ordinal = ?
-    `,
-    )
-    const insertWindow = db.prepare(
-      `
-      INSERT INTO windows (
-        window_config_id,
-        conversation_id,
-        start_ordinal,
-        end_ordinal,
-        start_message_id,
-        end_message_id,
-        start_at,
-        end_at,
-        message_count,
-        deterministic_key
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(deterministic_key) DO UPDATE SET
-        start_message_id = excluded.start_message_id,
-        end_message_id = excluded.end_message_id,
-        start_at = excluded.start_at,
-        end_at = excluded.end_at,
-        message_count = excluded.message_count,
-        deterministic_key = excluded.deterministic_key
-    `,
-    )
-    const selectWindow = db.prepare(
-      `
-      SELECT id
-      FROM windows
-      WHERE deterministic_key = ?
-    `,
-    )
-
-    const windowIds: number[] = []
-    for (const range of ranges) {
-      const start = boundaryStatement.get(conversationId, range.startOrdinal) as MessageBoundary
-      const end = boundaryStatement.get(conversationId, range.endOrdinal) as MessageBoundary
-      const key = [
-        'conversation',
-        conversationId,
-        'config',
-        windowConfigId,
-        'messages',
-        start.id,
-        end.id,
-        'ordinals',
-        range.startOrdinal,
-        range.endOrdinal,
-      ].join(':')
-      insertWindow.run(
-        windowConfigId,
-        conversationId,
-        range.startOrdinal,
-        range.endOrdinal,
-        start.id,
-        end.id,
-        start.sent_at,
-        end.sent_at,
-        range.endOrdinal - range.startOrdinal + 1,
-        key,
-      )
-      const row = selectWindow.get(key) as { id: number }
-      windowIds.push(row.id)
-    }
-    return windowIds
-  })()
-}
-
-export function upsertScorerConfig(
-  db: AppDatabase,
-  key: string,
-  label: string,
-  config: unknown = {},
-): number {
-  db.prepare(
-    `
-    INSERT INTO scorer_configs (key, label, config_json)
-    VALUES (?, ?, ?)
-    ON CONFLICT(key) DO UPDATE SET
-      label = excluded.label,
-      config_json = excluded.config_json
-  `,
-  ).run(key, label, JSON.stringify(config))
-
-  const row = db.prepare('SELECT id FROM scorer_configs WHERE key = ?').get(key) as { id: number }
-  return row.id
-}
-
-export function createAnalysisRunForWindows(
-  db: AppDatabase,
-  scorerConfigId: number,
-  windowIds: number[],
-): number {
-  return db.transaction(() => {
-    const run = db
-      .prepare(
-        `
-        INSERT INTO analysis_runs (scorer_config_id, status, started_at)
-        VALUES (?, 'pending', ?)
-      `,
-      )
-      .run(scorerConfigId, Date.now())
-    const runId = Number(run.lastInsertRowid)
-    const insertRunWindow = db.prepare(
-      `
-      INSERT OR IGNORE INTO run_windows (run_id, window_id, status)
-      VALUES (?, ?, 'pending')
-    `,
-    )
-    for (const windowId of windowIds) {
-      insertRunWindow.run(runId, windowId)
-    }
-    return runId
-  })()
+function validatePositiveInteger(name: string, value: number, allowZero = false): void {
+  const valid = Number.isInteger(value) && (allowZero ? value >= 0 : value > 0)
+  if (!valid) {
+    throw new RangeError(`${name} must be ${allowZero ? 'a non-negative' : 'a positive'} integer`)
+  }
 }

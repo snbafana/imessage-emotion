@@ -82,82 +82,88 @@ export function migrate(db: AppDatabase): void {
       last_error TEXT,
       updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
     );
+  `)
 
-    CREATE TABLE IF NOT EXISTS window_configs (
-      id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      message_count INTEGER NOT NULL,
-      stride INTEGER NOT NULL,
-      min_tail_messages INTEGER NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-      CHECK (message_count > 0),
-      CHECK (stride > 0),
-      CHECK (min_tail_messages > 0),
-      CHECK (stride <= message_count),
-      CHECK (min_tail_messages <= message_count)
-    );
+  resetLegacyAnalysisTables(db)
+
+  db.exec(`
+    PRAGMA foreign_keys = ON;
 
     CREATE TABLE IF NOT EXISTS windows (
       id INTEGER PRIMARY KEY,
-      window_config_id INTEGER NOT NULL REFERENCES window_configs(id) ON DELETE CASCADE,
+      run_id INTEGER NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
       conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      ordinal INTEGER NOT NULL,
       start_ordinal INTEGER NOT NULL,
       end_ordinal INTEGER NOT NULL,
+      context_start_ordinal INTEGER,
+      context_end_ordinal INTEGER,
+      focal_start_ordinal INTEGER NOT NULL,
+      focal_end_ordinal INTEGER NOT NULL,
       start_message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
       end_message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
-      start_at INTEGER NOT NULL,
-      end_at INTEGER NOT NULL,
       message_count INTEGER NOT NULL,
-      deterministic_key TEXT NOT NULL UNIQUE,
+      context_message_count INTEGER NOT NULL DEFAULT 0,
+      focal_message_count INTEGER NOT NULL,
+      window_metadata_json TEXT NOT NULL DEFAULT '{}',
+      result_json TEXT NOT NULL DEFAULT '{}',
+      shift_json TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'pending',
+      latency_ms INTEGER,
+      error TEXT,
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-      CHECK (start_ordinal <= end_ordinal)
+      CHECK (start_ordinal <= end_ordinal),
+      CHECK (focal_start_ordinal <= focal_end_ordinal),
+      UNIQUE (run_id, ordinal)
     );
 
     CREATE INDEX IF NOT EXISTS windows_conversation_order_idx
       ON windows(conversation_id, start_ordinal, end_ordinal);
-
-    CREATE TABLE IF NOT EXISTS scorer_configs (
-      id INTEGER PRIMARY KEY,
-      key TEXT NOT NULL UNIQUE,
-      label TEXT NOT NULL,
-      config_json TEXT NOT NULL DEFAULT '{}',
-      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
-    );
+    CREATE INDEX IF NOT EXISTS windows_run_order_idx
+      ON windows(run_id, ordinal);
 
     CREATE TABLE IF NOT EXISTS analysis_runs (
       id INTEGER PRIMARY KEY,
-      scorer_config_id INTEGER NOT NULL REFERENCES scorer_configs(id) ON DELETE RESTRICT,
+      conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      method_key TEXT NOT NULL,
       status TEXT NOT NULL,
+      window_config_json TEXT NOT NULL,
+      context_config_json TEXT NOT NULL,
+      scorer_config_json TEXT NOT NULL,
+      summary_json TEXT NOT NULL DEFAULT '{}',
       started_at INTEGER NOT NULL,
       completed_at INTEGER,
-      notes TEXT
+      error TEXT
     );
-
-    CREATE TABLE IF NOT EXISTS run_windows (
-      run_id INTEGER NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
-      window_id INTEGER NOT NULL REFERENCES windows(id) ON DELETE CASCADE,
-      status TEXT NOT NULL DEFAULT 'pending',
-      PRIMARY KEY (run_id, window_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS window_results (
-      id INTEGER PRIMARY KEY,
-      run_id INTEGER NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
-      window_id INTEGER NOT NULL REFERENCES windows(id) ON DELETE CASCADE,
-      scorer_config_id INTEGER NOT NULL REFERENCES scorer_configs(id) ON DELETE RESTRICT,
-      result_json TEXT NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-      UNIQUE (run_id, window_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS shifts (
-      id INTEGER PRIMARY KEY,
-      run_id INTEGER NOT NULL REFERENCES analysis_runs(id) ON DELETE CASCADE,
-      conversation_id INTEGER NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-      from_window_id INTEGER NOT NULL REFERENCES windows(id) ON DELETE CASCADE,
-      to_window_id INTEGER NOT NULL REFERENCES windows(id) ON DELETE CASCADE,
-      result_json TEXT NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
-    );
+    CREATE INDEX IF NOT EXISTS analysis_runs_conversation_idx
+      ON analysis_runs(conversation_id, started_at DESC);
   `)
+}
+
+function resetLegacyAnalysisTables(db: AppDatabase): void {
+  if (!tableExists(db, 'windows') || tableHasColumn(db, 'windows', 'run_id')) return
+
+  db.exec(`
+    PRAGMA foreign_keys = OFF;
+    DROP TABLE IF EXISTS shifts;
+    DROP TABLE IF EXISTS window_results;
+    DROP TABLE IF EXISTS run_windows;
+    DROP TABLE IF EXISTS analysis_runs;
+    DROP TABLE IF EXISTS windows;
+    DROP TABLE IF EXISTS scorer_configs;
+    DROP TABLE IF EXISTS window_configs;
+    PRAGMA foreign_keys = ON;
+  `)
+}
+
+function tableExists(db: AppDatabase, tableName: string): boolean {
+  const row = db
+    .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = ?")
+    .get(tableName) as { found: number } | undefined
+  return row !== undefined
+}
+
+function tableHasColumn(db: AppDatabase, tableName: string, columnName: string): boolean {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>
+  return columns.some((column) => column.name === columnName)
 }
