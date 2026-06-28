@@ -1,15 +1,16 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useEveAgent } from 'eve/react'
 import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
-import EmotionTimeline from './EmotionTimeline'
+import EmotionTimeline, { AnalysisSetupPanel } from './EmotionTimeline'
 import type { AnalysisSetupPlan, AnalysisSetupValue } from './EmotionTimeline'
 import ChatPanel from './ChatPanel'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
 import TwoTierRoom from './TwoTierRoom'
+import ControlRoom from './ControlRoom'
 import { getDashboardApi } from './api'
 import {
   formatDateRange,
@@ -66,6 +67,9 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
     useState<AnalysisSetupValue>(DEFAULT_ANALYSIS_SETUP)
   const [analysisRunning, setAnalysisRunning] = useState(false)
   const [showTwoTier, setShowTwoTier] = useState(false)
+  // Recompute opens a settings popup first instead of running immediately.
+  const [showRecalcSetup, setShowRecalcSetup] = useState(false)
+  const [showControlRoom, setShowControlRoom] = useState(false)
   // null = no active search (show everything); a Set = the conversation ids
   // whose participants matched the contacts FTS query.
   const [matchedConversationIds, setMatchedConversationIds] = useState<Set<string> | null>(null)
@@ -88,6 +92,11 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
   const chat = useEveAgent()
   // Run id currently being scored in the background; drives the live poll.
   const [liveRunId, setLiveRunId] = useState<number | null>(null)
+  // Once a run finishes we ask eve to surface insights automatically. These refs
+  // let the live-poll effect trigger that without re-subscribing on every chat
+  // streaming tick, and guard against firing twice for the same run.
+  const requestInsightsRef = useRef<(run: RunView) => void>(() => {})
+  const insightRequestedRunRef = useRef<number | null>(null)
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeId) ?? null,
@@ -107,6 +116,28 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
         : null,
     [analysisSetup, selectedConversation],
   )
+
+  // Kept current on every render so the live-poll effect can fire it with the
+  // latest chat helpers without listing `chat` (which changes each stream tick)
+  // as a dependency.
+  requestInsightsRef.current = (finishedRun: RunView) => {
+    if (chat.status === 'submitted' || chat.status === 'streaming') return
+    if (chat.status === 'error') chat.reset()
+    const scored = finishedRun.scoredWindowCount ?? finishedRun.windowCount ?? 0
+    void chat.send({
+      message:
+        `The "${selectedConversation?.title ?? 'conversation'}" analysis just finished ` +
+        `(${finishedRun.scaleLabel}, ${scored} scored windows). Summarize the key emotional ` +
+        `insights across the whole timeline: the dominant moods, the biggest emotional shifts ` +
+        `and which windows they happen in, and anything worth a closer look. Keep it concise.`,
+      clientContext: {
+        scope: 'whole',
+        conversationId: selectedConversation ? Number(selectedConversation.rawId) : null,
+        runId: Number(finishedRun.rawId),
+        windowId: null,
+      },
+    })
+  }
 
   const reloadConversations = useCallback(async () => {
     if (!hasConversationApi(api)) {
@@ -199,6 +230,15 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
   useEffect(() => {
     void reloadConversations()
   }, [reloadConversations])
+
+  useEffect(() => {
+    if (!showRecalcSetup) return
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setShowRecalcSetup(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showRecalcSetup])
 
   useEffect(() => {
     const query = searchQuery.trim()
@@ -324,6 +364,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
 
     setAnalysisRunning(true)
     setRunError(null)
+    setShowControlRoom(true)
     setActionStatus(`Scoring windows with ${analysisSetup.model}...`)
     try {
       const options = analysisRunOptions(analysisSetup, setupPlan)
@@ -375,6 +416,11 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
               ? `Analysis failed${live.error ? `: ${live.error}` : '.'}`
               : `Analysis finished with ${analysisSetup.model}.`,
           )
+          // On a successful run, have eve surface insights in the chat — once.
+          if (live && live.state !== 'failed' && insightRequestedRunRef.current !== liveRunId) {
+            insightRequestedRunRef.current = liveRunId
+            requestInsightsRef.current(live)
+          }
         }
       } catch {
         // Transient read error — keep polling; a persistent failure surfaces via
@@ -414,7 +460,21 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
             <span className="name">{selectedConversation?.title ?? 'No conversation selected'}</span>
             <span className="range">
               {selectedConversation
-                ? `${formatDateRange(selectedConversation.firstMessageAt, selectedConversation.lastMessageAt)} · ${formatMessageCount(selectedConversation.messageCount)} messages · ${selectedConversation.participantSummary}`
+                ? [
+                    formatDateRange(
+                      selectedConversation.firstMessageAt,
+                      selectedConversation.lastMessageAt,
+                    ),
+                    `${formatMessageCount(selectedConversation.messageCount)} messages`,
+                    // Only show participants when they add info beyond the title
+                    // (group chats) — for 1:1s the title already is the person.
+                    selectedConversation.participantSummary &&
+                    selectedConversation.participantSummary !== selectedConversation.title
+                      ? selectedConversation.participantSummary
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
                 : 'Sync messages to populate the dashboard'}
             </span>
             {syncStatusLine && (
@@ -444,9 +504,16 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
               RoBERTa → RLM
             </Button>
             <Button
+              className="recalc secondary"
+              disabled={!selectedConversation || showControlRoom}
+              onClick={() => setShowControlRoom(true)}
+            >
+              Control room
+            </Button>
+            <Button
               className="recalc"
-              disabled={!selectedConversation || analysisRunning || !setupPlan || Boolean(setupPlan.error)}
-              onClick={startAxRun}
+              disabled={!selectedConversation || analysisRunning}
+              onClick={() => setShowRecalcSetup(true)}
             >
               <RecalcIcon />
               {analysisRunning ? 'Recomputing…' : 'Recompute (ax)'}
@@ -494,6 +561,36 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
         </div>
       </div>
 
+      {showRecalcSetup && (
+        <>
+          <button
+            className="chat-backdrop"
+            type="button"
+            aria-label="Close analysis setup"
+            onClick={() => setShowRecalcSetup(false)}
+          />
+          <div className="recalc-modal" role="dialog" aria-modal="true" aria-label="Recompute analysis setup">
+            <div className="recalc-modal-head">
+              <span>Recompute analysis</span>
+              <button type="button" className="recalc-modal-close" onClick={() => setShowRecalcSetup(false)}>
+                Close
+              </button>
+            </div>
+            <AnalysisSetupPanel
+              conversation={selectedConversation}
+              setup={analysisSetup}
+              plan={setupPlan}
+              running={analysisRunning}
+              onChange={(patch) => setAnalysisSetup((current) => ({ ...current, ...patch }))}
+              onRun={() => {
+                setShowRecalcSetup(false)
+                void startAxRun()
+              }}
+            />
+          </div>
+        </>
+      )}
+
       {showTwoTier && selectedConversation && (
         <TwoTierRoom
           conversationId={Number(selectedConversation.rawId)}
@@ -502,6 +599,16 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
           onDone={() => {
             void reloadRun(selectedConversation)
           }}
+        />
+      )}
+
+      {showControlRoom && (
+        <ControlRoom
+          api={api}
+          windows={windows}
+          title={selectedConversation?.title}
+          busy={analysisRunning}
+          onClose={() => setShowControlRoom(false)}
         />
       )}
     </div>

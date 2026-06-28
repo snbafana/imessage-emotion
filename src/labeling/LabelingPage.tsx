@@ -42,6 +42,8 @@ export default function LabelingPage() {
   const [queueError, setQueueError] = useState<string | null>(null)
   const [detailError, setDetailError] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportStatus, setExportStatus] = useState<string | null>(null)
 
   const selectedIndex = useMemo(
     () => windows.findIndex((item) => item.window.id === selectedWindowId),
@@ -145,6 +147,34 @@ export default function LabelingPage() {
     }
   }
 
+  async function exportTask() {
+    if (!detail?.label || exporting) return
+    setExporting(true)
+    setExportStatus(null)
+    try {
+      const result = await trpc.exportHarborTask.mutate({ windowId: detail.window.id })
+      setExportStatus(`Exported ${result.taskId} → ${result.dir}`)
+    } catch (error) {
+      setExportStatus(error instanceof Error ? error.message : 'Export failed.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function exportAll() {
+    if (exporting || labeledCount === 0) return
+    setExporting(true)
+    setExportStatus(null)
+    try {
+      const result = await trpc.exportAllHarborTasks.mutate({})
+      setExportStatus(`Exported ${result.count} task${result.count === 1 ? '' : 's'} → ${result.dir}`)
+    } catch (error) {
+      setExportStatus(error instanceof Error ? error.message : 'Export failed.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   function selectOffset(offset: number) {
     if (selectedIndex < 0) return
     const next = windows[selectedIndex + offset]
@@ -176,6 +206,21 @@ export default function LabelingPage() {
           <span>{unlabeledCount} open</span>
           <span>{labeledCount} labeled</span>
         </div>
+
+        <button
+          type="button"
+          className="export-all-button"
+          onClick={() => void exportAll()}
+          disabled={exporting || labeledCount === 0}
+          title="Write every labeled window as a Harbor eval task"
+        >
+          {exporting ? 'Exporting...' : `Export ${labeledCount} labeled → Harbor`}
+        </button>
+        {exportStatus && (
+          <div className={`labeling-state${exportStatus.includes('failed') ? ' error' : ''}`}>
+            {exportStatus}
+          </div>
+        )}
 
         {queueError && <div className="labeling-state error">{queueError}</div>}
         {queueLoading && <div className="labeling-state">Loading windows...</div>}
@@ -236,6 +281,14 @@ export default function LabelingPage() {
               disabled={saving || unlabeledCount === 0}
             >
               Next open
+            </button>
+            <button
+              type="button"
+              onClick={() => void exportTask()}
+              disabled={exporting || !detail?.label}
+              title="Write this labeled window as a Harbor eval task"
+            >
+              {exporting ? 'Exporting...' : 'Export Harbor task'}
             </button>
           </div>
         </header>

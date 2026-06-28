@@ -23,6 +23,37 @@ export default function Sidebar({
   onSearchChange: (value: string) => void
 }) {
   const searching = searchQuery.trim().length > 0
+  const analyzed = conversations.filter((conversation) => conversation.latestRun != null)
+  const pending = conversations.filter((conversation) => conversation.latestRun == null)
+
+  const renderPerson = (conversation: ConversationView) => (
+    <Button
+      key={conversation.id}
+      className={`person${conversation.id === activeId ? ' active' : ''}`}
+      onClick={() => onSelect(conversation.id)}
+    >
+      <Avatar.Root className="avatar" style={{ background: conversation.avatar }}>
+        <Avatar.Fallback>{conversation.initial}</Avatar.Fallback>
+      </Avatar.Root>
+      <div className="meta">
+        <span className="name">{conversation.title}</span>
+        <span className="submeta">{formatMessageCount(conversation.messageCount)} msgs</span>
+      </div>
+    </Button>
+  )
+
+  const renderGroup = (label: string, group: ConversationView[]) => {
+    if (group.length === 0) return null
+    return (
+      <div className="people-group">
+        <span className="label people-group-label">
+          {label} · {group.length}
+        </span>
+        {group.map(renderPerson)}
+      </div>
+    )
+  }
+
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -54,21 +85,8 @@ export default function Sidebar({
       )}
 
       <div className="people">
-        {conversations.map((conversation) => (
-          <Button
-            key={conversation.id}
-            className={`person${conversation.id === activeId ? ' active' : ''}`}
-            onClick={() => onSelect(conversation.id)}
-          >
-            <Avatar.Root className="avatar" style={{ background: conversation.avatar }}>
-              <Avatar.Fallback>{conversation.initial}</Avatar.Fallback>
-            </Avatar.Root>
-            <div className="meta">
-              <span className="name">{conversation.title}</span>
-              <span className="submeta">{formatMessageCount(conversation.messageCount)} msgs</span>
-            </div>
-          </Button>
-        ))}
+        {renderGroup('Analyzed', analyzed)}
+        {renderGroup('Run analysis', pending)}
       </div>
     </aside>
   )
