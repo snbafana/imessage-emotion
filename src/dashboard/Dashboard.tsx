@@ -389,7 +389,21 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
             <span className="name">{selectedConversation?.title ?? 'No conversation selected'}</span>
             <span className="range">
               {selectedConversation
-                ? `${formatDateRange(selectedConversation.firstMessageAt, selectedConversation.lastMessageAt)} · ${formatMessageCount(selectedConversation.messageCount)} messages · ${selectedConversation.participantSummary}`
+                ? [
+                    formatDateRange(
+                      selectedConversation.firstMessageAt,
+                      selectedConversation.lastMessageAt,
+                    ),
+                    `${formatMessageCount(selectedConversation.messageCount)} messages`,
+                    // Only show participants when they add info beyond the title
+                    // (group chats) — for 1:1s the title already is the person.
+                    selectedConversation.participantSummary &&
+                    selectedConversation.participantSummary !== selectedConversation.title
+                      ? selectedConversation.participantSummary
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')
                 : 'Sync messages to populate the dashboard'}
             </span>
             {syncStatusLine && (

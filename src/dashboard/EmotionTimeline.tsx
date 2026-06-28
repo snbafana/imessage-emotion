@@ -1,4 +1,5 @@
 import { Button } from '@base-ui/react/button'
+import { Select } from '@base-ui/react/select'
 import type { ComparativeRunWindowConfig } from '../lib/windows/windows'
 import type { ConversationView, EmotionKey, RunView, WindowView } from './data'
 import { EMOTIONS, SCORE_KEYS, formatMessageCount, gradientFor, runStateLabel, timelineBlocks } from './data'
@@ -42,6 +43,7 @@ function scoreY(value: number): number {
 // Smooth Catmull-Rom path through per-window scores in a fixed non-scaling
 // viewBox. This keeps sparse large-window runs and dense granular runs readable.
 function scorePath(points: [number, number][]): string {
+  if (points.length === 0) return ''
   if (points.length === 1) return `M${points[0][0]},${points[0][1]} L1000,${points[0][1]}`
   let d = `M${points[0][0]},${points[0][1]}`
   for (let i = 0; i < points.length - 1; i += 1) {
@@ -104,6 +106,26 @@ function runScorerMeta(run: RunView): string {
   return parts.join(' · ')
 }
 
+function runOptionLabel(run: RunView): string {
+  return `${run.scaleLabel} · ${runMeta(run)}`
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function hasScores(window: WindowView): boolean {
   return SCORE_KEYS.some((key) => window.scores[key] != null)
 }
@@ -157,29 +179,39 @@ export default function EmotionTimeline({
         <div className="heading">
           <div className="title-row">
             <h1>{run ? 'Emotion graph' : stateLabel}</h1>
-            {run && (
-              <span className={`trend-note status-${run.state}`}>
-                {run.scaleLabel} · {run.configLabel} · {runScorerMeta(run)} · {runMeta(run)}
-              </span>
-            )}
           </div>
         </div>
-        {runs.length > 1 && (
-          <div className="run-switcher" aria-label="Analysis runs">
-            {runs.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`run-tab scale-${item.scale}`}
-                aria-pressed={item.id === selectedRunId}
-                data-selected={item.id === selectedRunId ? '' : undefined}
-                onClick={() => onSelectRun(item.id)}
-              >
-                <span className="run-kind">{item.scaleLabel}</span>
-                <span className="run-count">{runMeta(item)}</span>
-              </button>
-            ))}
-          </div>
+        {run && runs.length > 0 && (
+          <Select.Root
+            value={selectedRunId ?? run.id}
+            onValueChange={(value) => value && onSelectRun(String(value))}
+          >
+            <Select.Trigger className="run-select" aria-label="Select analysis run">
+              <span className="run-select-label">{runOptionLabel(run)}</span>
+              <Select.Icon className="run-select-icon">
+                <ChevronDownIcon />
+              </Select.Icon>
+            </Select.Trigger>
+            <Select.Portal>
+              <Select.Positioner className="run-select-positioner" sideOffset={6} align="end">
+                <Select.Popup className="run-select-popup">
+                  {runs.map((item) => (
+                    <Select.Item key={item.id} value={item.id} className="run-select-item">
+                      <span className="run-option">
+                        <Select.ItemText className="run-option-main">
+                          {runOptionLabel(item)}
+                        </Select.ItemText>
+                        <span className="run-option-sub">{runScorerMeta(item)}</span>
+                      </span>
+                      <Select.ItemIndicator className="run-select-check">
+                        <CheckIcon />
+                      </Select.ItemIndicator>
+                    </Select.Item>
+                  ))}
+                </Select.Popup>
+              </Select.Positioner>
+            </Select.Portal>
+          </Select.Root>
         )}
       </div>
 
