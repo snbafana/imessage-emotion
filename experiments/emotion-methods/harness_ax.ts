@@ -367,7 +367,7 @@ function cuedSql(sql: string): Array<Record<string, unknown>> {
     encoding: "utf8",
     maxBuffer: 20 * 1024 * 1024,
   });
-  return JSON.parse(raw.replace(/^\(node:[^\n]+\)\s+ExperimentalWarning:[\s\S]*?\n(?=[\[{])/, ""));
+  return JSON.parse(raw.replace(/^\(node:[^\n]+\)\s+ExperimentalWarning:[\s\S]*?\n(?=[[{])/, ""));
 }
 
 function loadDataset(config: Config): Conversation[] {
@@ -445,7 +445,7 @@ function scoreEmojiKeywordFeatures(text: string): Scores {
       if (lowered.includes(term)) scores[anchor] += 1;
     }
   }
-  if (/[❤️💕💗😍🥰😘]/u.test(text)) scores.joy += 2;
+  if (/❤️|💕|💗|😍|🥰|😘/u.test(text)) scores.joy += 2;
   if (/[😂🤣😄😆]/u.test(text)) scores.joy += 2;
   if (/[😬😰😭]/u.test(text)) scores.fear += 1.5;
   if (/[😡🙄]/u.test(text)) scores.anger += 1.5;
@@ -455,7 +455,7 @@ function scoreEmojiKeywordFeatures(text: string): Scores {
   return normalize(scores);
 }
 
-let robertaEmotionClassifier: Promise<any> | null = null;
+let robertaEmotionClassifier: ReturnType<typeof pipeline> | null = null;
 
 async function robertaEmotion() {
   robertaEmotionClassifier ??= pipeline("text-classification", ROBERTA_EMOTION_MODEL, { dtype: "q8" });
