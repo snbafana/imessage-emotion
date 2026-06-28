@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
+import { fileURLToPath } from "node:url";
 import { ai, ax } from "@ax-llm/ax";
 import { pipeline } from "@huggingface/transformers";
 
@@ -986,16 +987,26 @@ function mergedWindowing(base: NonNullable<Config["windowing"]>, llm: LlmConfig[
   });
 }
 
+function assertSafeRawOutputPath(out: string, includeWindowText: boolean) {
+  if (!includeWindowText) return;
+  const outRoot = resolve(fileURLToPath(OUT_DIR));
+  const outPath = resolve(out);
+  if (outPath !== outRoot && !outPath.startsWith(`${outRoot}${sep}`)) {
+    throw new Error(`includeWindowTextInOutput can only write under ignored out/: ${outPath}`);
+  }
+}
+
 async function main() {
   loadEnv();
   const args = parseArgs();
   const config = loadConfig(args.config);
+  const includeWindowText = Boolean(config.dataset?.includeWindowTextInOutput);
+  assertSafeRawOutputPath(args.out, includeWindowText);
   mkdirSync(OUT_DIR, { recursive: true });
 
   const conversations = loadDataset(config);
   const windowing = mergedWindowing(config.windowing ?? [{ size: 8, stride: 4 }], config.llm ?? []);
   const deterministicNames = config.deterministic ?? ["roberta_emotion", "emoji_keyword_features"];
-  const includeWindowText = Boolean(config.dataset?.includeWindowTextInOutput);
   const deterministic = await runDeterministic(conversations, windowing, deterministicNames, includeWindowText);
   const selection = config.selection ?? {};
   const selectedWindows = selectWindows(conversations, windowing[0] ?? { size: 8, stride: 4 }, selection, deterministic);

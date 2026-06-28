@@ -4,11 +4,13 @@
     "kind": "private",
     "privateConversationLimit": 5,
     "privateConversationOrder": "longest",
-    "maxMessagesPerConversation": 0,
+    "maxMessagesPerConversation": 2000,
     "includeWindowTextInOutput": true
   },
   "windowing": [
-    { "size": 16, "stride": 8 }
+    { "size": 8, "stride": 4 },
+    { "size": 16, "stride": 8 },
+    { "size": 32, "stride": 16 }
   ],
   "selection": {
     "strategy": "top_shift",
@@ -16,7 +18,8 @@
     "candidateScorer": "roberta_emotion"
   },
   "deterministic": [
-    "roberta_emotion"
+    "roberta_emotion",
+    "emoji_keyword_features"
   ],
   "llm": [
     {
@@ -50,6 +53,20 @@
       "runMode": "selected_windows",
       "window": { "size": 16, "stride": 8 },
       "contextMode": "prior_summary",
+      "maxConversations": 5,
+      "concurrency": 8,
+      "maxWindows": 50,
+      "maxTokens": 350
+    },
+    {
+      "name": "top5_qwen_selected_8x4_prior_messages",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "runMode": "selected_windows",
+      "window": { "size": 8, "stride": 4 },
+      "contextMode": "prior_messages",
+      "contextMessages": 24,
+      "maxContextChars": 6000,
       "maxConversations": 5,
       "concurrency": 8,
       "maxWindows": 50,
