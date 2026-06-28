@@ -9,6 +9,7 @@ import type { AnalysisSetupPlan, AnalysisSetupValue } from './EmotionTimeline'
 import ChatPanel from './ChatPanel'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
+import TwoTierRoom from './TwoTierRoom'
 import { getDashboardApi } from './api'
 import {
   formatDateRange,
@@ -64,6 +65,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
   const [analysisSetup, setAnalysisSetup] =
     useState<AnalysisSetupValue>(DEFAULT_ANALYSIS_SETUP)
   const [analysisRunning, setAnalysisRunning] = useState(false)
+  const [showTwoTier, setShowTwoTier] = useState(false)
   // null = no active search (show everything); a Set = the conversation ids
   // whose participants matched the contacts FTS query.
   const [matchedConversationIds, setMatchedConversationIds] = useState<Set<string> | null>(null)
@@ -435,6 +437,13 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
               {isSyncing ? 'Syncing...' : 'Sync Data'}
             </Button>
             <Button
+              className="recalc secondary"
+              disabled={!selectedConversation || showTwoTier}
+              onClick={() => setShowTwoTier(true)}
+            >
+              RoBERTa → RLM
+            </Button>
+            <Button
               className="recalc"
               disabled={!selectedConversation || analysisRunning || !setupPlan || Boolean(setupPlan.error)}
               onClick={startAxRun}
@@ -484,6 +493,17 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
           </div>
         </div>
       </div>
+
+      {showTwoTier && selectedConversation && (
+        <TwoTierRoom
+          conversationId={Number(selectedConversation.rawId)}
+          title={selectedConversation.title}
+          onClose={() => setShowTwoTier(false)}
+          onDone={() => {
+            void reloadRun(selectedConversation)
+          }}
+        />
+      )}
     </div>
   )
 }

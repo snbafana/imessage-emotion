@@ -55,10 +55,19 @@ function meanScores(rows: AnchorScores[]): AnchorScores {
   return Object.fromEntries(EKMAN_ANCHORS.map((a) => [a, rows.length ? totals[a] / rows.length : 0])) as AnchorScores
 }
 
+export type TriageProgress = (e: {
+  windowId: number
+  ordinal: number
+  focal: string
+  dominant: Anchor
+  scores: AnchorScores
+  shift: number
+}) => void
+
 export async function triageRunWithRoberta(
   db: AppDatabase,
   runId: number,
-  opts: { onProgress?: (e: { ordinal: number; dominant: Anchor; shift: number }) => void } = {},
+  opts: { onProgress?: TriageProgress } = {},
 ): Promise<TriageResult> {
   const windows = getRunWindows(db, runId)
   const focalTexts = windows.map((w) => {
@@ -108,7 +117,15 @@ export async function triageRunWithRoberta(
       row.window.id,
     )
 
-    opts.onProgress?.({ ordinal: row.window.ordinal, dominant: row.dominant, shift })
+    const focal = `${row.window.focalStartOrdinal}-${row.window.focalEndOrdinal}`
+    opts.onProgress?.({
+      windowId: row.window.id,
+      ordinal: row.window.ordinal,
+      focal,
+      dominant: row.dominant,
+      scores: row.scores,
+      shift,
+    })
     return {
       windowId: row.window.id,
       ordinal: row.window.ordinal,

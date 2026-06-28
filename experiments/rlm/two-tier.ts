@@ -26,7 +26,6 @@ async function main() {
   let triaged = 0
   const result = await scoreRunTwoTier(db, runId, {
     topK,
-    batchSize,
     subConcurrency: 50,
     onTriage: () => {
       triaged += 1

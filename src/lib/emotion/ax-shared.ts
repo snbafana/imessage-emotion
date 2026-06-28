@@ -39,3 +39,23 @@ export function gatewayService(model: string) {
     config: { model: 'default' as never, temperature: 0 },
   } as never)
 }
+
+// Preferred service: OpenAI directly for `gpt-*` models (gpt-5* are reasoning
+// models needing temperature 1 + token headroom), and the gateway for any
+// provider-prefixed model. Lets the scorers run OpenAI-only.
+export function scorerService(model: string, opts: { maxTokens?: number } = {}) {
+  if (!model.startsWith('gpt-')) return gatewayService(model)
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error('OPENAI_API_KEY not set')
+  const isReasoning = model.startsWith('gpt-5')
+  return ai({
+    name: 'openai',
+    apiKey,
+    models: [{ key: 'default', description: model, model: model as never }],
+    config: {
+      model: 'default' as never,
+      temperature: isReasoning ? 1 : 0,
+      maxTokens: opts.maxTokens ?? (isReasoning ? 3000 : 800),
+    },
+  } as never)
+}
