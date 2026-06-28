@@ -3,7 +3,7 @@ import type { AppDatabase } from '../db/schema'
 import { getRunWindows } from '../api/runs'
 import { getWindowMessages } from '../api/messages'
 import { EKMAN_ANCHORS, type Anchor, type AnchorScores } from './anchors'
-import { clamp, dominantOf, gatewayService, lenientParse } from './ax-shared'
+import { clamp, dominantOf, lenientParse, scorerService } from './ax-shared'
 
 // RLM scorer: instead of the host orchestrating one tool call per window (which
 // caps out when the model has to emit hundreds of calls in a turn), a single ax
@@ -46,8 +46,8 @@ export async function scoreRunWithRlm(
   runId: number,
   opts: RlmOptions = {},
 ): Promise<RlmResult> {
-  const actorModel = opts.actorModel ?? 'anthropic/claude-sonnet-4.6'
-  const subModel = opts.subModel ?? 'openai/gpt-4o-mini'
+  const actorModel = opts.actorModel ?? 'gpt-4.1'
+  const subModel = opts.subModel ?? 'gpt-5-mini'
   const batchSize = opts.batchSize ?? 10
 
   // Worklist: focal text + a rolling baseline from the prior windows' scores.
@@ -148,7 +148,7 @@ export async function scoreRunWithRlm(
     // Top-level cap on actor turns before the responder is forced (default 8/10).
     // A many-window run needs one turn per batch, so give it generous headroom.
     maxTurns: opts.maxTurns ?? 80,
-    recursionOptions: { ai: gatewayService(subModel) as never },
+    recursionOptions: { ai: scorerService(subModel) as never },
     executorOptions: {
       description: [
         `Score EVERY window of this run on the 7 Ekman emotions (${EKMAN_ANCHORS.join(', ')}).`,
@@ -162,7 +162,7 @@ export async function scoreRunWithRlm(
   })
 
   const started = performance.now()
-  const out = (await scorer.forward(gatewayService(actorModel) as never, {
+  const out = (await scorer.forward(scorerService(actorModel) as never, {
     task: `Score all ${total} windows of run ${runId}, ${batchSize} at a time, until every window is persisted.`,
   })) as { summary?: string }
   const wallMs = Math.round(performance.now() - started)
