@@ -1,11 +1,22 @@
 import type {
   AnalysisWindow as ApiAnalysisWindow,
   ConversationSummary as ApiConversationSummary,
-  ImessageEmotionApi,
   RunSummary as ApiRunSummary,
   WindowMessage as ApiWindowMessage,
   WindowMessageSlice,
 } from '../lib/api/types'
+// Imperative client the dashboard loads through (implemented in ./api with the
+// typed tRPC client). Results flow into the permissive normalizers below, so the
+// methods are widened to `unknown` at this boundary.
+export type DashboardApi = {
+  listConversations(): Promise<unknown>
+  getConversation(conversationId: number): Promise<unknown>
+  listRuns(conversationId: number): Promise<unknown>
+  createBaselineRun(conversationId: number): Promise<unknown>
+  getRunWindows(runId: number): Promise<unknown>
+  getWindowMessages(windowId: number, slice: WindowMessageSlice): Promise<unknown>
+  syncMessagesNow(): Promise<unknown>
+}
 
 export type EmotionKey =
   | 'warmth'
@@ -202,14 +213,7 @@ export type DashboardSmokeHtmlInput = {
 
 type JsonRecord = Record<string, unknown>
 
-export function getDashboardApi(): ImessageEmotionApi | null {
-  if (typeof window === 'undefined') return null
-  return (window as unknown as { ipcRenderer?: ImessageEmotionApi }).ipcRenderer ?? null
-}
-
-export function hasConversationApi(api: ImessageEmotionApi | null): api is ImessageEmotionApi & {
-  listConversations: () => Promise<unknown>
-} {
+export function hasConversationApi(api: DashboardApi | null): api is DashboardApi {
   return typeof api?.listConversations === 'function'
 }
 
@@ -345,7 +349,7 @@ export function normalizeMessages(input: unknown): MessageView[] {
 }
 
 export async function getWindowMessages(
-  api: ImessageEmotionApi,
+  api: DashboardApi,
   windowId: string | number,
   slice: MessageSlice,
 ): Promise<MessageView[]> {

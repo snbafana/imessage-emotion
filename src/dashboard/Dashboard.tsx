@@ -1,13 +1,15 @@
+'use client'
+
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
 import EmotionTimeline from './EmotionTimeline'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
+import { getDashboardApi } from './api'
 import {
   formatDateRange,
   formatMessageCount,
-  getDashboardApi,
   getWindowMessages,
   hasConversationApi,
   latestRun,
