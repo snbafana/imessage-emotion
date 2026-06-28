@@ -3,6 +3,11 @@
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
   "appId": "YourAppID",
   "asar": true,
+  // better-sqlite3 is a native module; keep its .node binary outside the asar
+  // archive so it can be dlopen'd at runtime in the packaged app.
+  "asarUnpack": [
+    "**/node_modules/better-sqlite3/**"
+  ],
   "productName": "YourAppName",
   "directories": {
     "output": "release/${version}"
