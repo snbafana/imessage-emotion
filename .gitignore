@@ -45,3 +45,6 @@ native/**/.build/
 *.sqlite-shm
 *.sqlite-wal
 .data/
+
+# local Claude Code skill cache
+.claude/

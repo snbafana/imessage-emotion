@@ -1,5 +1,4 @@
 import type { AppDatabase } from '../db/schema'
-import { hasColumn } from './db'
 import type { WindowMessage, WindowMessageSlice } from './types'
 
 type MessageRow = {
@@ -29,33 +28,7 @@ type WindowBoundary = {
   focal_end_ordinal: number
 }
 
-function hasRunOwnedWindows(db: AppDatabase): boolean {
-  return hasColumn(db, 'analysis_runs', 'conversation_id') && hasColumn(db, 'windows', 'run_id')
-}
-
 function getWindowBoundary(db: AppDatabase, windowId: number): WindowBoundary | null {
-  if (hasRunOwnedWindows(db)) {
-    return (
-      (db
-        .prepare(
-          `
-          SELECT
-            id,
-            conversation_id,
-            start_ordinal,
-            end_ordinal,
-            context_start_ordinal,
-            context_end_ordinal,
-            focal_start_ordinal,
-            focal_end_ordinal
-          FROM windows
-          WHERE id = ?
-        `,
-        )
-        .get(windowId) as WindowBoundary | undefined) ?? null
-    )
-  }
-
   return (
     (db
       .prepare(
@@ -65,10 +38,10 @@ function getWindowBoundary(db: AppDatabase, windowId: number): WindowBoundary | 
           conversation_id,
           start_ordinal,
           end_ordinal,
-          NULL AS context_start_ordinal,
-          NULL AS context_end_ordinal,
-          start_ordinal AS focal_start_ordinal,
-          end_ordinal AS focal_end_ordinal
+          context_start_ordinal,
+          context_end_ordinal,
+          focal_start_ordinal,
+          focal_end_ordinal
         FROM windows
         WHERE id = ?
       `,

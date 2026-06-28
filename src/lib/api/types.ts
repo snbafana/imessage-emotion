@@ -115,8 +115,7 @@ export interface RunSummary {
   completedAt: number | null
   windowConfig?: RunWindowConfigMetadata | Record<string, unknown>
   scorerConfig?: Record<string, unknown>
-  summary: RunSummaryMetadata | Record<string, unknown>
-  summaryJson?: Record<string, unknown>
+  summary: Record<string, unknown>
   error?: string | null
 }
 
@@ -130,78 +129,6 @@ export interface WindowResult {
   evidenceMessageIds?: number[]
   method?: string
   [key: string]: unknown
-}
-
-export interface ShiftThresholds {
-  baselineWindowMin: number
-  baselineWindowMax: number
-  minorDelta: number
-  majorDelta: number
-}
-
-export type ShiftSeverity = 'major' | 'minor' | 'none'
-export type ShiftTrend = 'warmer' | 'tenser' | 'mixed' | 'stable'
-
-export interface EmotionDelta {
-  emotion: string
-  baseline: number
-  current: number
-  delta: number
-  direction: 'increase' | 'decrease' | 'flat'
-  severity: ShiftSeverity
-  label: string
-}
-
-export interface WindowShiftMetadata {
-  method: 'rolling-shift-v1'
-  status: 'pending_baseline' | 'stable' | 'minor_shift' | 'major_shift' | 'missing_scores'
-  windowId: number
-  ordinal: number
-  baselineWindowIds: number[]
-  baselineWindowCount: number
-  thresholds: ShiftThresholds
-  scores: EmotionScores
-  baselineScores: EmotionScores
-  deltas: Record<string, number>
-  strongest: EmotionDelta[]
-  strongestLabel: string | null
-  trend: ShiftTrend
-  trendScore: number
-  contextLabel: string | null
-}
-
-export interface DashboardShift {
-  windowId: number
-  ordinal: number
-  label: string
-  emotion: string
-  delta: number
-  severity: Exclude<ShiftSeverity, 'none'>
-  trend: ShiftTrend
-  contextLabel: string | null
-}
-
-export interface RunSummaryMetadata {
-  method: 'rolling-shift-summary-v1'
-  runId: number
-  status: string
-  isPending: boolean
-  isIncomplete: boolean
-  windowCount: number
-  scoredWindowCount: number
-  pendingWindowCount: number
-  shiftedWindowCount: number
-  majorShiftCount: number
-  minorShiftCount: number
-  stableWindowCount: number
-  strongestShift: DashboardShift | null
-  strongestTrend: ShiftTrend
-  counts: {
-    byTrend: Record<string, number>
-    byEmotion: Record<string, number>
-  }
-  thresholds: ShiftThresholds
-  updatedAt: string
 }
 
 export interface AnalysisWindow {
@@ -221,9 +148,7 @@ export interface AnalysisWindow {
   metadata: JsonRecord
   status: RunStatus
   result: WindowResult
-  resultJson?: WindowResult
-  shift: WindowShiftMetadata | Record<string, unknown>
-  shiftJson?: Record<string, unknown>
+  shift: Record<string, unknown>
   latencyMs: number | null
   error?: string | null
   createdAt: number
@@ -246,34 +171,7 @@ export interface WindowMessage {
   slice: WindowMessageSlice
 }
 
-export interface BaselineRunOptions {
-  methodKey?: string
-  windowSize?: number
-  contextMessages?: number
-  focalMessages?: number
-  stride?: number
-  minFocalMessages?: number
-  mode?: 'absolute-message-count' | 'comparative-message-count'
-  scorerConfig?: Record<string, unknown>
-}
-
 export type WindowMessageSlice = 'all' | 'full' | 'context' | 'focal'
-
-export interface WindowMessagesResult {
-  window: AnalysisWindow
-  slice: WindowMessageSlice
-  messages: WindowMessage[]
-}
-
-export interface ChatTurn {
-  role: 'user' | 'assistant'
-  text: string
-  citations?: Array<{
-    messageId?: number
-    windowId?: number
-    label: string
-  }>
-}
 
 export interface AskConversationInput {
   conversationId: number
