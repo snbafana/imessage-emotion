@@ -112,56 +112,13 @@ export function loadContactsFromNativeHelper(path: string): ContactRecord[] {
   return contacts.map(normalizeContactRecord)
 }
 
-export function loadContactsFromMacOS(): ContactRecord[] {
-  const script = `
-    const app = Application('Contacts');
-    const people = app.people();
-    const output = [];
-
-    for (let i = 0; i < people.length; i += 1) {
-      const person = people[i];
-      const phones = [];
-      const emails = [];
-
-      const phonesValue = person.phones();
-      for (let j = 0; j < phonesValue.length; j += 1) {
-        phones.push(String(phonesValue[j].value()));
-      }
-
-      const emailsValue = person.emails();
-      for (let j = 0; j < emailsValue.length; j += 1) {
-        emails.push(String(emailsValue[j].value()));
-      }
-
-      output.push({
-        sourceId: String(person.id()),
-        displayName: [String(person.firstName() || ''), String(person.lastName() || '')].join(' ').trim() || String(person.organization() || 'Unknown'),
-        company: String(person.organization() || '') || null,
-        avatarUrl: null,
-        phoneNumbers: phones,
-        emails: emails,
-      });
-    }
-
-    JSON.stringify(output);
-  `
-
-  const stdout = execFileSync('osascript', ['-l', 'JavaScript', '-e', script], {
-    encoding: 'utf8',
-    timeout: 120_000,
-  })
-  return JSON.parse(stdout) as ContactRecord[]
-}
-
 export function loadLocalContacts(path = process.env.IMESSAGE_CONTACTS_JSON_PATH): ContactRecord[] {
   if (path) return loadContactsFromFile(path)
 
   const nativeHelper = resolveNativeContactsHelper()
   if (nativeHelper) return loadContactsFromNativeHelper(nativeHelper)
 
-  if (process.env.IMESSAGE_CONTACTS_ALLOW_JXA === '1') return loadContactsFromMacOS()
-
   throw new Error(
-    'Contacts native helper not found. Set IMESSAGE_CONTACTS_NATIVE_BINARY or install Cued.app; set IMESSAGE_CONTACTS_ALLOW_JXA=1 to use the slow JXA fallback.',
+    'Contacts native helper not found. Set IMESSAGE_CONTACTS_NATIVE_BINARY or install Cued.app.',
   )
 }

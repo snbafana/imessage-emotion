@@ -36,9 +36,9 @@ const EFFORT = {
 } as const
 
 function service(model: string, maxTokens: number) {
-  const apiKey = process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY
-  if (!apiKey) throw new Error('Set OPENAI_API_KEY or OPENROUTER_API_KEY to run the ax scorer')
-  const apiURL = process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1' : undefined
+  const apiKey = process.env.OPENROUTER_API_KEY
+  if (!apiKey) throw new Error('Set OPENROUTER_API_KEY to run the ax scorer')
+  const apiURL = 'https://openrouter.ai/api/v1'
   return ai({
     name: 'openai',
     apiKey,
