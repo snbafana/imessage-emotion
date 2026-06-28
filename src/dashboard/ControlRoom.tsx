@@ -123,7 +123,7 @@ export default function ControlRoom({
 
   return (
     <div className="control-room">
-      <div className="cr-bar">
+      <div className="cr-topbar">
         <div className="cr-head">
           <div className="cr-title-row">
             <span className="cr-title">Recomputing {title ?? 'conversation'}</span>

@@ -941,7 +941,7 @@
   background: #fff;
   overflow: hidden;
 }
-.cr-bar {
+.cr-topbar {
   display: flex;
   align-items: center;
   gap: 16px;
