@@ -4,12 +4,7 @@ import { migrate, type AppDatabase } from '../db/schema'
 import { importBatch } from '../import/import-messages'
 import type { IMessageBatch } from '../imessage/types'
 import { syncContactRecords } from '../contacts/sync-contacts'
-import {
-  createAnalysisRunForWindows,
-  ensureWindowsForConversation,
-  upsertScorerConfig,
-  upsertWindowConfig,
-} from '../windows/windows'
+import { createBaselineRun } from '../emotion/run-baseline'
 
 function createMemoryDb(): AppDatabase {
   const db = new Database(':memory:')
@@ -50,7 +45,7 @@ function syntheticBatch(messageCount: number): IMessageBatch {
 }
 
 describe('data foundation integration', () => {
-  it('imports messages, resolves contacts, builds windows, and links runs', () => {
+  it('imports messages, resolves contacts, builds run-owned windows, and scores a baseline run', () => {
     const db = createMemoryDb()
 
     const importResult = importBatch(db, syntheticBatch(150))
@@ -79,28 +74,43 @@ describe('data foundation integration', () => {
       .get('+14155550123')
     expect(contact).toEqual({ display_name: 'Synthetic Contact', source_contact_id: 'card-1' })
 
-    const windowConfigId = upsertWindowConfig(db, {
-      name: '100-by-50',
-      messageCount: 100,
-      stride: 50,
-      minTailMessages: 50,
-    })
-    const windowIds = ensureWindowsForConversation(db, conversation.id, windowConfigId)
-    expect(windowIds).toHaveLength(2)
+    const run = createBaselineRun(db, conversation.id)
+    expect(run.windowCount).toBe(1)
 
     const windows = db
-      .prepare('SELECT start_ordinal, end_ordinal FROM windows ORDER BY start_ordinal')
+      .prepare(
+        `
+        SELECT
+          run_id,
+          start_ordinal,
+          end_ordinal,
+          context_start_ordinal,
+          context_end_ordinal,
+          focal_start_ordinal,
+          focal_end_ordinal,
+          result_json
+        FROM windows
+        ORDER BY ordinal
+      `,
+      )
       .all()
     expect(windows).toEqual([
-      { start_ordinal: 1, end_ordinal: 100 },
-      { start_ordinal: 51, end_ordinal: 150 },
+      {
+        run_id: run.runId,
+        start_ordinal: 1,
+        end_ordinal: 150,
+        context_start_ordinal: 1,
+        context_end_ordinal: 100,
+        focal_start_ordinal: 101,
+        focal_end_ordinal: 150,
+        result_json: expect.stringContaining('"scores"'),
+      },
     ])
 
-    const scorerConfigId = upsertScorerConfig(db, 'stub-v1', 'Stub scorer')
-    const runId = createAnalysisRunForWindows(db, scorerConfigId, windowIds)
-    const runWindowCount = db
-      .prepare('SELECT COUNT(*) AS count FROM run_windows WHERE run_id = ?')
-      .get(runId) as { count: number }
-    expect(runWindowCount.count).toBe(2)
+    const analysisRun = db
+      .prepare('SELECT status, summary_json FROM analysis_runs WHERE id = ?')
+      .get(run.runId) as { status: string; summary_json: string }
+    expect(analysisRun.status).toBe('completed')
+    expect(JSON.parse(analysisRun.summary_json).windowCount).toBe(1)
   })
 })

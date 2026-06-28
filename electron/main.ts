@@ -4,8 +4,14 @@ import path from 'node:path'
 import { openAppDatabase, type AppDatabase } from '../src/lib/db/schema'
 import {
   API_CHANNELS,
+  type BaselineRunOptions,
+  type RunSummary,
   type SyncStatus,
 } from '../src/lib/api/types'
+import {
+  createBaselineRun,
+  type CreateBaselineRunOptions,
+} from '../src/lib/emotion/run-baseline'
 import {
   startContactsSync,
   type ContactsSyncController,
@@ -64,6 +70,72 @@ function getSyncStatus(): SyncStatus {
 
 function contractStub(method: string): never {
   throw new Error(`${method} is not implemented yet`)
+}
+
+function getDatabase(): AppDatabase {
+  if (!db) throw new Error('Database is not ready')
+  return db
+}
+
+function createBaselineRunSummary(
+  conversationId: number,
+  options: BaselineRunOptions = {},
+): RunSummary {
+  if (options.methodKey && options.methodKey !== 'baseline-v1') {
+    throw new Error(`Unsupported baseline method: ${options.methodKey}`)
+  }
+
+  const runOptions: CreateBaselineRunOptions = {
+    mode: options.mode,
+    contextMessages: options.contextMessages,
+    focalMessages: options.focalMessages ?? options.windowSize,
+    stride: options.stride,
+    minFocalMessages: options.minFocalMessages,
+    scorerConfig: options.scorerConfig,
+  }
+  const result = createBaselineRun(getDatabase(), conversationId, runOptions)
+  const row = getDatabase()
+    .prepare(
+      `
+      SELECT
+        id,
+        conversation_id,
+        method_key,
+        status,
+        started_at,
+        completed_at,
+        summary_json,
+        error
+      FROM analysis_runs
+      WHERE id = ?
+    `,
+    )
+    .get(result.runId) as
+    | {
+        id: number
+        conversation_id: number
+        method_key: string
+        status: RunSummary['status']
+        started_at: number
+        completed_at: number | null
+        summary_json: string
+        error: string | null
+      }
+    | undefined
+
+  if (!row) throw new Error(`Missing baseline run ${result.runId}`)
+
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    methodKey: row.method_key,
+    status: row.status,
+    windowCount: result.windowCount,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    summary: JSON.parse(row.summary_json) as Record<string, unknown>,
+    error: row.error ?? undefined,
+  }
 }
 
 function startAppServices() {
@@ -130,7 +202,11 @@ ipcMain.handle(API_CHANNELS.syncContactsNow, async () => {
 })
 ipcMain.handle(API_CHANNELS.listConversations, () => contractStub('listConversations'))
 ipcMain.handle(API_CHANNELS.getConversation, () => contractStub('getConversation'))
-ipcMain.handle(API_CHANNELS.createBaselineRun, () => contractStub('createBaselineRun'))
+ipcMain.handle(
+  API_CHANNELS.createBaselineRun,
+  (_event, conversationId: number, options?: BaselineRunOptions) =>
+    createBaselineRunSummary(conversationId, options),
+)
 ipcMain.handle(API_CHANNELS.listRuns, () => contractStub('listRuns'))
 ipcMain.handle(API_CHANNELS.getRunWindows, () => contractStub('getRunWindows'))
 ipcMain.handle(API_CHANNELS.getWindowMessages, () => contractStub('getWindowMessages'))

@@ -54,7 +54,7 @@ export interface RunSummary {
   id: number
   conversationId: number
   methodKey: string
-  status: 'pending' | 'running' | 'completed' | 'error'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'error'
   windowCount: number
   startedAt: number
   completedAt: number | null
@@ -86,7 +86,7 @@ export interface AnalysisWindow {
   messageCount: number
   contextMessageCount: number
   focalMessageCount: number
-  status: 'pending' | 'running' | 'completed' | 'error'
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'error'
   result: WindowResult
   shift: Record<string, unknown>
   latencyMs: number | null
@@ -109,8 +109,12 @@ export interface WindowMessage {
 export interface BaselineRunOptions {
   methodKey?: string
   windowSize?: number
+  contextMessages?: number
+  focalMessages?: number
   stride?: number
+  minFocalMessages?: number
   mode?: 'absolute-message-count' | 'comparative-message-count'
+  scorerConfig?: Record<string, unknown>
 }
 
 export type WindowMessageSlice = 'all' | 'context' | 'focal'
