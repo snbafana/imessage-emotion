@@ -1,5 +1,5 @@
 import type { AppDatabase } from '../db/schema'
-import type { WindowMessage, WindowMessageSlice } from './types'
+import type { LabelingMessageSlice, WindowMessage, WindowMessageSlice } from './types'
 
 type MessageRow = {
   id: number
@@ -75,23 +75,68 @@ export function getWindowMessages(
   const range = ordinalRange(slice, window)
   if (!range) return []
 
+  return getConversationMessagesInRange(db, window.conversation_id, range.start, range.end, slice)
+}
+
+export function getConversationMessagesBefore(
+  db: AppDatabase,
+  conversationId: number,
+  beforeOrdinal: number,
+  limit: number,
+): WindowMessage[] {
+  if (limit <= 0 || beforeOrdinal <= 1) return []
   const rows = db
     .prepare(
       `
-      SELECT
-        m.id,
-        m.conversation_id,
-        m.conversation_ordinal,
-        m.source_rowid,
-        m.guid,
-        m.sender_contact_id,
-        COALESCE(NULLIF(c.display_name, ''), c.handle_identifier) AS sender_name,
-        m.text,
-        m.sent_at,
-        m.is_from_me,
-        m.is_read,
-        m.has_attachments,
-        m.status
+      SELECT ${messageSelectColumns()}
+      FROM messages m
+      LEFT JOIN contacts c ON c.id = m.sender_contact_id
+      WHERE
+        m.conversation_id = ?
+        AND m.conversation_ordinal < ?
+      ORDER BY m.conversation_ordinal DESC, m.sent_at DESC, m.source_rowid DESC, m.guid DESC
+      LIMIT ?
+    `,
+    )
+    .all(conversationId, beforeOrdinal, limit) as MessageRow[]
+  return mapMessageRows(rows.reverse(), 'before')
+}
+
+export function getConversationMessagesAfter(
+  db: AppDatabase,
+  conversationId: number,
+  afterOrdinal: number,
+  limit: number,
+): WindowMessage[] {
+  if (limit <= 0) return []
+  const rows = db
+    .prepare(
+      `
+      SELECT ${messageSelectColumns()}
+      FROM messages m
+      LEFT JOIN contacts c ON c.id = m.sender_contact_id
+      WHERE
+        m.conversation_id = ?
+        AND m.conversation_ordinal > ?
+      ORDER BY m.conversation_ordinal, m.sent_at, m.source_rowid, m.guid
+      LIMIT ?
+    `,
+    )
+    .all(conversationId, afterOrdinal, limit) as MessageRow[]
+  return mapMessageRows(rows, 'after')
+}
+
+function getConversationMessagesInRange(
+  db: AppDatabase,
+  conversationId: number,
+  startOrdinal: number,
+  endOrdinal: number,
+  slice: WindowMessageSlice,
+): WindowMessage[] {
+  const rows = db
+    .prepare(
+      `
+      SELECT ${messageSelectColumns()}
       FROM messages m
       LEFT JOIN contacts c ON c.id = m.sender_contact_id
       WHERE
@@ -100,8 +145,30 @@ export function getWindowMessages(
       ORDER BY m.conversation_ordinal, m.sent_at, m.source_rowid, m.guid
     `,
     )
-    .all(window.conversation_id, range.start, range.end) as MessageRow[]
+    .all(conversationId, startOrdinal, endOrdinal) as MessageRow[]
 
+  return mapMessageRows(rows, slice)
+}
+
+function messageSelectColumns(): string {
+  return `
+    m.id,
+    m.conversation_id,
+    m.conversation_ordinal,
+    m.source_rowid,
+    m.guid,
+    m.sender_contact_id,
+    COALESCE(NULLIF(c.display_name, ''), c.handle_identifier) AS sender_name,
+    m.text,
+    m.sent_at,
+    m.is_from_me,
+    m.is_read,
+    m.has_attachments,
+    m.status
+  `
+}
+
+function mapMessageRows(rows: MessageRow[], slice: LabelingMessageSlice): WindowMessage[] {
   return rows.map((row) => ({
     id: row.id,
     conversationId: row.conversation_id,

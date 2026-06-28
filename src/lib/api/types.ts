@@ -120,6 +120,8 @@ export interface RunSummary {
 }
 
 export type EmotionScores = Record<string, number>
+export type EmotionAnchor = import('../emotion/anchors').Anchor
+export type LabelAmbiguity = 'low' | 'medium' | 'high'
 
 export interface WindowResult {
   scores?: EmotionScores
@@ -145,6 +147,8 @@ export interface AnalysisWindow {
   messageCount: number
   contextMessageCount: number
   focalMessageCount: number
+  startSentAt?: number | null
+  endSentAt?: number | null
   metadata: JsonRecord
   status: RunStatus
   result: WindowResult
@@ -168,10 +172,78 @@ export interface WindowMessage {
   isRead: boolean
   hasAttachments: boolean
   status: string
-  slice: WindowMessageSlice
+  slice: LabelingMessageSlice
 }
 
 export type WindowMessageSlice = 'all' | 'full' | 'context' | 'focal'
+export type LabelingMessageSlice = WindowMessageSlice | 'before' | 'after'
+
+export interface WindowLabel {
+  id: number
+  windowId: number
+  labeler: string
+  dominant: EmotionAnchor | null
+  acceptableDominants: EmotionAnchor[]
+  scores: Partial<Record<EmotionAnchor, number>>
+  requiresContext: boolean | null
+  sarcasmOrSubtext: boolean | null
+  ambiguity: LabelAmbiguity | null
+  stateLabel: string | null
+  evidenceMessageRefs: number[]
+  pivotalMessageRefs: number[]
+  notes: string | null
+  createdAt: number
+  updatedAt: number
+}
+
+export interface WindowPrediction {
+  dominant: string | null
+  confidence: number | null
+  scores: EmotionScores
+  summary: string | null
+  evidenceMessageIds: number[]
+}
+
+export interface LabelingWindowSummary {
+  window: AnalysisWindow
+  conversation: Pick<
+    ConversationSummary,
+    'id' | 'title' | 'participantSummary' | 'messageCount' | 'firstMessageAt' | 'lastMessageAt'
+  >
+  run: Pick<RunSummary, 'id' | 'methodKey' | 'status' | 'startedAt' | 'windowConfig'>
+  prediction: WindowPrediction
+  label: WindowLabel | null
+}
+
+export interface LabelingWindowDetail extends LabelingWindowSummary {
+  beforeMessages: WindowMessage[]
+  contextMessages: WindowMessage[]
+  focalMessages: WindowMessage[]
+  allMessages: WindowMessage[]
+  afterMessages: WindowMessage[]
+}
+
+export interface ListLabelingWindowsInput {
+  conversationId?: number
+  runId?: number
+  labeler?: string
+  limit?: number
+}
+
+export interface SaveWindowLabelInput {
+  windowId: number
+  labeler?: string
+  dominant?: EmotionAnchor | null
+  acceptableDominants?: EmotionAnchor[]
+  scores?: Partial<Record<EmotionAnchor, number>>
+  requiresContext?: boolean | null
+  sarcasmOrSubtext?: boolean | null
+  ambiguity?: LabelAmbiguity | null
+  stateLabel?: string | null
+  evidenceMessageRefs?: number[]
+  pivotalMessageRefs?: number[]
+  notes?: string | null
+}
 
 export interface AskConversationInput {
   conversationId: number

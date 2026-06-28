@@ -144,6 +144,27 @@ export function migrate(db: AppDatabase): void {
     );
     CREATE INDEX IF NOT EXISTS analysis_runs_conversation_idx
       ON analysis_runs(conversation_id, started_at DESC);
+
+    CREATE TABLE IF NOT EXISTS window_labels (
+      id INTEGER PRIMARY KEY,
+      window_id INTEGER NOT NULL REFERENCES windows(id) ON DELETE CASCADE,
+      labeler TEXT NOT NULL DEFAULT 'human',
+      dominant TEXT,
+      acceptable_dominants_json TEXT NOT NULL DEFAULT '[]',
+      scores_json TEXT NOT NULL DEFAULT '{}',
+      requires_context INTEGER,
+      sarcasm_or_subtext INTEGER,
+      ambiguity TEXT,
+      state_label TEXT,
+      evidence_message_refs_json TEXT NOT NULL DEFAULT '[]',
+      pivotal_message_refs_json TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+      UNIQUE (window_id, labeler)
+    );
+    CREATE INDEX IF NOT EXISTS window_labels_window_idx
+      ON window_labels(window_id);
   `)
 
   ensureContactsFts(db)
