@@ -20,7 +20,9 @@ type Card = {
 // Derive the live grid from the eve session stream: recompute_conversation gives
 // the window plan; each score_window tool-call's lifecycle gives a window's state.
 function deriveCards(agent: UseEveAgentHelpers<EveMessageData>): Card[] {
-  const plan = new Map<number, { ordinal: number; focal?: string }>()
+  // Only the most recent recompute_conversation defines the current plan — a
+  // durable session can hold earlier recomputes whose windows we must not show.
+  let plan = new Map<number, { ordinal: number; focal?: string }>()
   const score = new Map<number, { state: string; output?: Record<string, unknown> }>()
 
   for (const message of agent.data.messages) {
@@ -31,6 +33,8 @@ function deriveCards(agent: UseEveAgentHelpers<EveMessageData>): Card[] {
       const output = (part as { output?: unknown }).output as Record<string, unknown> | undefined
       if (part.toolName === 'recompute_conversation') {
         const windows = (output?.windows as Array<Record<string, unknown>>) ?? []
+        if (windows.length === 0) continue
+        plan = new Map()
         for (const w of windows) {
           if (typeof w.id === 'number') plan.set(w.id, { ordinal: Number(w.ordinal), focal: String(w.focal ?? '') })
         }
