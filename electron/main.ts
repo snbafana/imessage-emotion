@@ -48,16 +48,21 @@ let lastContactsStatus: ContactsSyncStatus = {
   resolvedHandles: 0,
 }
 
+const IMESSAGE_SYNC_INTERVAL_MS = 30_000
+const CONTACTS_SYNC_INTERVAL_MS = 10 * 60 * 1000
+
 function startAppServices() {
   const dbPath = path.join(app.getPath('userData'), 'imessage-emotion.sqlite')
   db = openAppDatabase(dbPath)
   imessageSync = startIMessageSync(db, {
+    pollIntervalMs: IMESSAGE_SYNC_INTERVAL_MS,
     onStatus(status) {
       lastSyncStatus = status
       win?.webContents.send('imessage-sync-status', status)
     },
   })
   contactsSync = startContactsSync(db, {
+    pollIntervalMs: CONTACTS_SYNC_INTERVAL_MS,
     onStatus(status) {
       lastContactsStatus = status
       win?.webContents.send('contacts-sync-status', status)
