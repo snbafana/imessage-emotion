@@ -18,7 +18,7 @@ export default function Inspector({
   loading: boolean
   error: string | null
 }) {
-  const dominant = window?.dominant ?? 'trust'
+  const dominant = window?.dominant ?? 'neutral'
   const emotion = EMOTIONS[dominant]
   const stateLabel = runStateLabel(run, window ? [window] : [])
 

@@ -142,7 +142,7 @@ describe('run-owned window persistence', () => {
       [firstRun.runId, 1, 150],
       [secondRun.runId, 1, 150],
     ])
-    expect(JSON.parse(rows[0].result_json).scores.warmth).toBeGreaterThan(0)
+    expect(JSON.parse(rows[0].result_json).scores.joy).toBeGreaterThan(0)
   })
 
   it('stores context and focal boundaries on the run-owned window', () => {

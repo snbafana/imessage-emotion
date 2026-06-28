@@ -6,6 +6,7 @@ import type {
   WindowMessage as ApiWindowMessage,
   WindowMessageSlice,
 } from '../lib/api/types'
+import { ANCHOR_DISPLAY, EKMAN_ANCHORS, type Anchor } from '../lib/emotion/anchors'
 // Imperative client the dashboard loads through (implemented in ./api with the
 // typed tRPC client). Results flow into the permissive normalizers below, so the
 // methods are widened to `unknown` at this boundary.
@@ -21,32 +22,13 @@ export type DashboardApi = {
   syncContactsNow(): Promise<ApiSyncStatus>
 }
 
-export type EmotionKey =
-  | 'warmth'
-  | 'joy'
-  | 'trust'
-  | 'stress'
-  | 'friction'
-  | 'sadness'
-  | 'anger'
-  | 'fear'
-  | 'surprise'
+// Canonical Ekman-7 anchors, shared with the scorer + eve agent.
+export type EmotionKey = Anchor
+export const EMOTIONS = ANCHOR_DISPLAY
 
-export const EMOTIONS: Record<EmotionKey, { label: string; color: string; ink: string }> = {
-  warmth: { label: 'Warmth', color: 'oklch(0.69 0.12 182)', ink: 'oklch(0.52 0.12 182)' },
-  joy: { label: 'Joy', color: 'oklch(0.79 0.15 78)', ink: 'oklch(0.55 0.13 78)' },
-  trust: { label: 'Trust', color: 'oklch(0.69 0.12 182)', ink: 'oklch(0.52 0.12 182)' },
-  stress: { label: 'Stress', color: 'oklch(0.58 0.17 300)', ink: 'oklch(0.5 0.16 300)' },
-  friction: { label: 'Friction', color: 'oklch(0.63 0.2 27)', ink: 'oklch(0.52 0.2 27)' },
-  sadness: { label: 'Sadness', color: 'oklch(0.61 0.13 252)', ink: 'oklch(0.5 0.13 252)' },
-  anger: { label: 'Anger', color: 'oklch(0.63 0.2 27)', ink: 'oklch(0.52 0.2 27)' },
-  fear: { label: 'Fear', color: 'oklch(0.58 0.17 300)', ink: 'oklch(0.5 0.16 300)' },
-  surprise: { label: 'Surprise', color: 'oklch(0.84 0.16 108)', ink: 'oklch(0.58 0.14 108)' },
-}
+export const SCORE_KEYS = EKMAN_ANCHORS
 
-export const SCORE_KEYS = ['warmth', 'joy', 'stress', 'friction', 'sadness'] as const
-
-export type ScoreKey = (typeof SCORE_KEYS)[number]
+export type ScoreKey = Anchor
 export type Scores = Partial<Record<ScoreKey, number>>
 export type RunState = 'no-run' | 'pending' | 'scored' | 'failed' | 'unknown'
 export type MessageSlice = WindowMessageSlice
@@ -625,6 +607,6 @@ export const CHAT: ChatTurn[] = [
   {
     role: 'agent',
     text: 'Demo chat is deferred until the non-session conversation API lands.',
-    citation: { label: 'Demo only', delta: '+0.00', color: EMOTIONS.trust.ink },
+    citation: { label: 'Demo only', delta: '+0.00', color: EMOTIONS.neutral.ink },
   },
 ]

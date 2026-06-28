@@ -5,6 +5,7 @@ import {
   validateRunWindowConfig,
 } from '../windows/windows'
 import { scoreBaselineMessages, type BaselineMessage, type BaselineResult } from './baseline'
+import { EKMAN_ANCHORS } from './anchors'
 import { computeShift, type WindowShift } from './shifts'
 
 export interface CreateBaselineRunOptions extends Partial<RunWindowConfig> {
@@ -215,10 +216,9 @@ function selectFocalMessages(
 function summarizeRun(
   results: Array<{ windowId: number; result: BaselineResult; shift: WindowShift }>,
 ): BaselineRunSummary {
-  const emotions = ['warmth', 'joy', 'stress', 'friction', 'sadness'] as const
+  const emotions = EKMAN_ANCHORS
   const totals = Object.fromEntries(emotions.map((emotion) => [emotion, 0])) as BaselineResult['scores']
-  const dominantLabels = [...emotions, 'neutral'] as const
-  const dominantCounts = Object.fromEntries(dominantLabels.map((emotion) => [emotion, 0])) as Record<
+  const dominantCounts = Object.fromEntries(emotions.map((emotion) => [emotion, 0])) as Record<
     BaselineResult['dominant'],
     number
   >

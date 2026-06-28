@@ -1,25 +1,75 @@
-# iMessage Emotion
+# Undercurrent — iMessage Emotion Timeline
 
-Next.js app foundation for analyzing emotion changes over time in local iMessage conversations.
+A **local-first** app that visualizes how the emotional tone of your iMessage
+conversations shifts over time, and lets you ask *why* a shift happened.
 
-## Data Foundation
+It runs entirely on your Mac: a Next.js server reads your local Messages
+database, scores conversation windows, and serves a dashboard — nothing leaves
+the machine.
 
-The app keeps its own SQLite database under `~/Library/Application Support/imessage-emotion` instead of repeatedly querying Apple's `chat.db` throughout the UI and analysis layers. The local tables dedupe contacts, conversations, and messages so analysis can use deterministic conversation history positions.
+## Stack
 
-Every imported message has a `conversation_ordinal` scoped to its conversation. Ordinals are assigned by normalized chronological order using `sent_at`, source rowid, and guid as deterministic tie-breakers. Windows use ordinal boundaries first, plus start/end message IDs for evidence joins.
+- **Next.js (App Router)** — UI + server, runs on system Node.
+- **tRPC** — the typed boundary between the dashboard and the backend. Procedure
+  inputs/outputs are inferred from the router, so there is no hand-maintained
+  client/server contract.
+- **Drizzle + better-sqlite3** — Drizzle owns the connection to the app's own
+  SQLite database (`src/lib/db/connection.ts`).
 
-Windows are reusable context slices owned by analysis runs, so the same local message history can be scored by many methods without changing the underlying context.
+## How it works
 
-## Included
+1. **Import** — the importer reads Apple's local `~/Library/Messages/chat.db`
+   (requires Full Disk Access) and syncs new rows into the app's own SQLite DB,
+   deduping contacts/conversations/messages. Each message gets a deterministic
+   `conversation_ordinal` (chronological, with rowid/guid tie-breakers).
+2. **Analyze** — an analysis *run* slices a conversation into run-owned
+   *windows* (context + focal message ranges) and scores each on the Ekman
+   anchors (anger / disgust / fear / joy / neutral / sadness / surprise) — a
+   lexical baseline or the Ax LLM scorer (`agent/tools/score_window`).
+3. **Detect shifts** — windows are compared against a rolling baseline to flag
+   warmer/tenser shifts and surface the strongest drivers.
+4. **Explore** — the dashboard shows the emotion timeline (colored composition
+   blocks + a valence line); the chat panel answers questions about a selected
+   window, grounded in its messages.
 
-- Local iMessage reader for `chat.db` access, Apple timestamp conversion, attributed-body text fallback, and handle normalization.
-- Local Contacts resolver for display names, company/card IDs, and avatar URLs when available from macOS Contacts.
-- App-owned SQLite schema for contacts, conversations, messages, import state, windows, and analysis runs.
-- Next/tRPC sync mutations that import local iMessage rows and refresh local contact resolution into the app-owned SQLite database.
-- Focused tests for ordinal assignment, contact resolution, sync controllers, windows, and run summaries.
+## Run it
 
-## Not Included
+```bash
+pnpm install
+pnpm dev            # http://localhost:3000
+```
 
-- Emotion scoring.
-- A full sync daemon or queue runtime.
-- Raw local databases or private message fixtures.
+The app stores its DB at
+`~/Library/Application Support/imessage-emotion/imessage-emotion.sqlite`
+(override with `IMESSAGE_EMOTION_DB_PATH`).
+
+### Try it with fake data (no Full Disk Access needed)
+
+```bash
+pnpm seed           # populates the DB with synthetic conversations + a scored run
+pnpm dev
+```
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `pnpm dev` | Run the app locally |
+| `pnpm build` / `pnpm start` | Production build / serve |
+| `pnpm seed` | Seed the DB with synthetic data |
+| `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm lint` | ESLint |
+| `pnpm test` | Vitest (data-foundation unit tests) |
+
+## Layout
+
+- `app/` — Next.js routes; `app/api/trpc/[trpc]` exposes the tRPC router.
+- `src/server/` — tRPC router + procedures.
+- `src/lib/` — framework-agnostic core: `imessage` parsing, `db` schema +
+  connection, `import`, `windows`, `emotion` (baseline + shifts), `chat`.
+- `src/dashboard/` — the React dashboard and its tRPC-backed data client.
+
+## Privacy
+
+Everything is local. The app reads `chat.db` read-only and never transmits
+message content.

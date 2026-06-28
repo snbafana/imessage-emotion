@@ -31,5 +31,7 @@ experiments/sqlite-latency/results/
 experiments/sqlite-latency/target/
 experiments/sqlite-latency/rust/target/
 
-# native helper build artifacts
-native/macos/ContactsHelper/.build/
+# sqlite sidecar files
+*.sqlite-shm
+*.sqlite-wal
+.data/

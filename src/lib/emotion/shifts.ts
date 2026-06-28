@@ -282,6 +282,7 @@ function round(value: number): number {
 
 // --- Per-window baseline shift (used by run-baseline; to be reconciled with computeRunShifts) ---
 import type { BaselineEmotion, BaselineResult } from './baseline'
+import { EKMAN_ANCHORS } from './anchors'
 
 export interface WindowShift {
   comparedToWindowId: number | null
@@ -293,7 +294,7 @@ export interface WindowShift {
   severity: 'none' | 'low' | 'medium' | 'high'
 }
 
-const emotions: BaselineEmotion[] = ['warmth', 'joy', 'stress', 'friction', 'sadness']
+const emotions: readonly BaselineEmotion[] = EKMAN_ANCHORS
 
 export function computeShift(
   previousWindowId: number | null,
