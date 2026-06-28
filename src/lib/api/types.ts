@@ -70,6 +70,7 @@ export interface RunSummary {
   startedAt: number
   completedAt: number | null
   summary: RunSummaryMetadata | Record<string, unknown>
+  summaryJson?: Record<string, unknown>
   error?: string | null
 }
 
@@ -174,7 +175,9 @@ export interface AnalysisWindow {
   metadata: JsonRecord
   status: RunStatus
   result: WindowResult
+  resultJson?: WindowResult
   shift: WindowShiftMetadata | Record<string, unknown>
+  shiftJson?: Record<string, unknown>
   latencyMs: number | null
   error?: string | null
   createdAt: number
