@@ -23,20 +23,22 @@ function toMilliseconds(seconds: number): number {
 function upsertContact(db: AppDatabase, handle: IMessageHandle): number {
   const identifier = handle.identifier.trim()
   const normalized = normalizeHandleForStorage(identifier)
+  const service = handle.service || 'iMessage'
   db.prepare(
     `
     INSERT INTO contacts (handle_identifier, normalized_handle, service, display_name, updated_at)
     VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(handle_identifier) DO UPDATE SET
+    ON CONFLICT(normalized_handle, service) DO UPDATE SET
+      handle_identifier = excluded.handle_identifier,
       normalized_handle = excluded.normalized_handle,
       service = excluded.service,
       updated_at = excluded.updated_at
   `,
-  ).run(identifier, normalized, handle.service, identifier, now())
+  ).run(identifier, normalized, service, identifier, now())
 
   const row = db
-    .prepare('SELECT id FROM contacts WHERE handle_identifier = ?')
-    .get(identifier) as { id: number }
+    .prepare('SELECT id FROM contacts WHERE normalized_handle = ? AND service = ?')
+    .get(normalized, service) as { id: number }
   return row.id
 }
 

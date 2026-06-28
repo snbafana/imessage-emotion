@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3'
 import { describe, expect, it } from 'vitest'
 import { migrate, type AppDatabase } from '../db/schema'
+import { recomputeConversationOrdinals } from '../import/import-messages'
 import {
   createAnalysisRunForWindows,
   ensureWindowsForConversation,
@@ -79,6 +80,11 @@ describe('window planning', () => {
       { startOrdinal: 101, endOrdinal: 200 },
     ])
   })
+
+  it('rejects configs that would create gaps or impossible tails', () => {
+    expect(() => planWindowRanges(200, 100, 101, 50)).toThrow(RangeError)
+    expect(() => planWindowRanges(200, 100, 50, 101)).toThrow(RangeError)
+  })
 })
 
 describe('window persistence', () => {
@@ -144,6 +150,82 @@ describe('window persistence', () => {
       { run_id: firstRunId, window_id: windowIds[1] },
       { run_id: secondRunId, window_id: windowIds[0] },
       { run_id: secondRunId, window_id: windowIds[1] },
+    ])
+  })
+
+  it('creates a new window version instead of mutating a scored window when boundaries change', () => {
+    const db = createMemoryDb()
+    const conversationId = seedConversation(db, 100)
+    const configId = upsertWindowConfig(db, {
+      name: '100-by-50',
+      messageCount: 100,
+      stride: 50,
+      minTailMessages: 50,
+    })
+    const originalWindowId = ensureWindowsForConversation(db, conversationId, configId)[0]
+    const scorerConfigId = upsertScorerConfig(db, 'stub-v1', 'Stub scorer')
+    createAnalysisRunForWindows(db, scorerConfigId, [originalWindowId])
+
+    db.prepare(
+      `
+      INSERT INTO messages (
+        conversation_id,
+        conversation_ordinal,
+        source_rowid,
+        guid,
+        text,
+        sent_at,
+        is_from_me,
+        is_read,
+        status
+      )
+      VALUES (?, -1, 0, 'message-0', 'synthetic earlier', 0, 0, 0, 'delivered')
+    `,
+    ).run(conversationId)
+    recomputeConversationOrdinals(db, conversationId)
+
+    const currentWindowIds = ensureWindowsForConversation(db, conversationId, configId)
+    const currentWindowId = currentWindowIds[0]
+    expect(currentWindowId).not.toBe(originalWindowId)
+    expect(currentWindowIds).toHaveLength(2)
+
+    const rows = db
+      .prepare(
+        `
+        SELECT id, start_ordinal, end_ordinal, start_message_id, end_message_id
+        FROM windows
+        ORDER BY id
+      `,
+      )
+      .all() as Array<{
+      id: number
+      start_ordinal: number
+      end_ordinal: number
+      start_message_id: number
+      end_message_id: number
+    }>
+    expect(rows).toEqual([
+      {
+        id: originalWindowId,
+        start_ordinal: 1,
+        end_ordinal: 100,
+        start_message_id: 1,
+        end_message_id: 100,
+      },
+      {
+        id: currentWindowIds[0],
+        start_ordinal: 1,
+        end_ordinal: 100,
+        start_message_id: 101,
+        end_message_id: 99,
+      },
+      {
+        id: currentWindowIds[1],
+        start_ordinal: 51,
+        end_ordinal: 101,
+        start_message_id: 50,
+        end_message_id: 100,
+      },
     ])
   })
 })

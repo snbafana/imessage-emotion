@@ -13,8 +13,9 @@ Windows are reusable context slices. A scoring run points at existing windows th
 ## Included
 
 - Local iMessage reader for `chat.db` access, Apple timestamp conversion, attributed-body text fallback, and handle normalization.
+- Local Contacts resolver for display names, company/card IDs, and avatar URLs when available from macOS Contacts.
 - App-owned SQLite schema for contacts, conversations, messages, import state, windows, scorer configs, runs, results, and shifts.
-- Main-process sync loop that imports new local iMessage rows while the Electron app is open.
+- Main-process sync loops that import new local iMessage rows and refresh local contact resolution while the Electron app is open.
 - Focused tests for ordinal assignment, overlapping windows, tail handling, and run-to-window relationships.
 
 ## Not Included

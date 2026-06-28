@@ -13,6 +13,7 @@ export interface IMessageSyncStatus {
   state: 'idle' | 'syncing' | 'error' | 'stopped'
   cursor: number
   importedMessages: number
+  hasMore?: boolean
   error?: string
 }
 
@@ -31,6 +32,7 @@ export function startIMessageSync(
   let stopped = false
   let running: Promise<IMessageSyncStatus> | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
+  let lastRunHadMore = false
   const batchSize = options.batchSize ?? DEFAULT_BATCH_SIZE
   const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
   const chatDbPath = options.chatDbPath ?? process.env.IMESSAGE_CHAT_DB_PATH ?? DEFAULT_CHAT_DB_PATH
@@ -50,18 +52,16 @@ export function startIMessageSync(
 
         const reader = new LocalIMessageReader(chatDbPath)
         try {
-          for (;;) {
-            const batch = reader.buildBatch(cursor, batchSize)
-            const result = importBatch(db, batch)
-            cursor = result.cursor
-            importedMessages += result.importedMessages
-            if (batch.fetchedCount < batchSize) break
-          }
+          const batch = reader.buildBatch(cursor, batchSize)
+          const result = importBatch(db, batch)
+          cursor = result.cursor
+          importedMessages = result.importedMessages
+          lastRunHadMore = batch.fetchedCount >= batchSize
         } finally {
           reader.close()
         }
 
-        return emit({ state: 'idle', cursor, importedMessages })
+        return emit({ state: 'idle', cursor, importedMessages, hasMore: lastRunHadMore })
       })
       .catch((error: unknown) => {
         recordImportError(db, error)
@@ -83,7 +83,7 @@ export function startIMessageSync(
     if (stopped) return
     timer = setTimeout(() => {
       void syncNow().finally(schedule)
-    }, pollIntervalMs)
+    }, lastRunHadMore ? 0 : pollIntervalMs)
   }
 
   void syncNow().finally(schedule)

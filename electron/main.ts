@@ -3,6 +3,11 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { openAppDatabase, type AppDatabase } from '../src/lib/db/schema'
 import {
+  startContactsSync,
+  type ContactsSyncController,
+  type ContactsSyncStatus,
+} from '../src/lib/sync/contacts-sync'
+import {
   startIMessageSync,
   type IMessageSyncController,
   type IMessageSyncStatus,
@@ -31,10 +36,16 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL ? path.join(process.env.APP_ROOT, 
 let win: BrowserWindow | null
 let db: AppDatabase | null = null
 let imessageSync: IMessageSyncController | null = null
+let contactsSync: ContactsSyncController | null = null
 let lastSyncStatus: IMessageSyncStatus = {
   state: 'idle',
   cursor: 0,
   importedMessages: 0,
+}
+let lastContactsStatus: ContactsSyncStatus = {
+  state: 'idle',
+  scannedContacts: 0,
+  resolvedHandles: 0,
 }
 
 function startAppServices() {
@@ -44,6 +55,12 @@ function startAppServices() {
     onStatus(status) {
       lastSyncStatus = status
       win?.webContents.send('imessage-sync-status', status)
+    },
+  })
+  contactsSync = startContactsSync(db, {
+    onStatus(status) {
+      lastContactsStatus = status
+      win?.webContents.send('contacts-sync-status', status)
     },
   })
 }
@@ -89,6 +106,8 @@ app.on('activate', () => {
 
 ipcMain.handle('imessage-sync-status', () => lastSyncStatus)
 ipcMain.handle('imessage-sync-now', async () => imessageSync?.syncNow() ?? lastSyncStatus)
+ipcMain.handle('contacts-sync-status', () => lastContactsStatus)
+ipcMain.handle('contacts-sync-now', async () => contactsSync?.syncNow() ?? lastContactsStatus)
 
 app.whenReady().then(() => {
   startAppServices()
@@ -97,5 +116,6 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   imessageSync?.stop()
+  contactsSync?.stop()
   db?.close()
 })

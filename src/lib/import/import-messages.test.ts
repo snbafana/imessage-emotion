@@ -109,4 +109,40 @@ describe('message import', () => {
         .run(),
     ).toThrow()
   })
+
+  it('dedupes contacts by normalized handle and service', () => {
+    const db = createMemoryDb()
+    const batch: IMessageBatch = {
+      cursor: 2,
+      fetchedCount: 2,
+      handles: [
+        { id: 1, identifier: '+14155550123', service: 'iMessage' },
+        { id: 2, identifier: '(415) 555-0123', service: 'iMessage' },
+      ],
+      chats: [
+        {
+          id: 10,
+          identifier: 'chat-10',
+          displayName: null,
+          isGroup: false,
+          participants: [
+            { id: 1, identifier: '+14155550123', service: 'iMessage' },
+            { id: 2, identifier: '(415) 555-0123', service: 'iMessage' },
+          ],
+        },
+      ],
+      messages: [],
+    }
+
+    importBatch(db, batch)
+
+    const contacts = db
+      .prepare('SELECT normalized_handle, service FROM contacts')
+      .all() as Array<{ normalized_handle: string; service: string }>
+    const participants = db
+      .prepare('SELECT COUNT(*) AS count FROM conversation_participants')
+      .get() as { count: number }
+    expect(contacts).toEqual([{ normalized_handle: '+14155550123', service: 'iMessage' }])
+    expect(participants.count).toBe(1)
+  })
 })

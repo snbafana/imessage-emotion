@@ -17,12 +17,17 @@ export function migrate(db: AppDatabase): void {
 
     CREATE TABLE IF NOT EXISTS contacts (
       id INTEGER PRIMARY KEY,
-      handle_identifier TEXT NOT NULL UNIQUE,
+      handle_identifier TEXT NOT NULL,
       normalized_handle TEXT NOT NULL,
-      service TEXT,
+      service TEXT NOT NULL DEFAULT 'iMessage',
       display_name TEXT,
+      company TEXT,
+      avatar_url TEXT,
+      source_contact_id TEXT,
+      resolved_at INTEGER,
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-      updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+      UNIQUE (normalized_handle, service)
     );
 
     CREATE TABLE IF NOT EXISTS conversations (
@@ -87,7 +92,9 @@ export function migrate(db: AppDatabase): void {
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
       CHECK (message_count > 0),
       CHECK (stride > 0),
-      CHECK (min_tail_messages > 0)
+      CHECK (min_tail_messages > 0),
+      CHECK (stride <= message_count),
+      CHECK (min_tail_messages <= message_count)
     );
 
     CREATE TABLE IF NOT EXISTS windows (
@@ -103,8 +110,7 @@ export function migrate(db: AppDatabase): void {
       message_count INTEGER NOT NULL,
       deterministic_key TEXT NOT NULL UNIQUE,
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-      CHECK (start_ordinal <= end_ordinal),
-      UNIQUE (window_config_id, conversation_id, start_ordinal, end_ordinal)
+      CHECK (start_ordinal <= end_ordinal)
     );
 
     CREATE INDEX IF NOT EXISTS windows_conversation_order_idx

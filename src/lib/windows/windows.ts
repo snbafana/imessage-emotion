@@ -18,6 +18,7 @@ type MessageBoundary = {
 }
 
 export function upsertWindowConfig(db: AppDatabase, input: WindowConfigInput): number {
+  validateWindowConfig(input.messageCount, input.stride, input.minTailMessages)
   db.prepare(
     `
     INSERT INTO window_configs (name, message_count, stride, min_tail_messages)
@@ -41,6 +42,7 @@ export function planWindowRanges(
   stride: number,
   minTailMessages: number,
 ): WindowRange[] {
+  validateWindowConfig(messageCount, stride, minTailMessages)
   if (lastOrdinal < minTailMessages) return []
 
   const ranges: WindowRange[] = []
@@ -59,6 +61,22 @@ export function planWindowRanges(
     break
   }
   return ranges
+}
+
+function validateWindowConfig(
+  messageCount: number,
+  stride: number,
+  minTailMessages: number,
+): void {
+  if (!Number.isInteger(messageCount) || messageCount <= 0) {
+    throw new RangeError('messageCount must be a positive integer')
+  }
+  if (!Number.isInteger(stride) || stride <= 0 || stride > messageCount) {
+    throw new RangeError('stride must be a positive integer no larger than messageCount')
+  }
+  if (!Number.isInteger(minTailMessages) || minTailMessages <= 0 || minTailMessages > messageCount) {
+    throw new RangeError('minTailMessages must be a positive integer no larger than messageCount')
+  }
 }
 
 export function ensureWindowsForConversation(
@@ -118,7 +136,7 @@ export function ensureWindowsForConversation(
         deterministic_key
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(window_config_id, conversation_id, start_ordinal, end_ordinal) DO UPDATE SET
+      ON CONFLICT(deterministic_key) DO UPDATE SET
         start_message_id = excluded.start_message_id,
         end_message_id = excluded.end_message_id,
         start_at = excluded.start_at,
@@ -131,10 +149,7 @@ export function ensureWindowsForConversation(
       `
       SELECT id
       FROM windows
-      WHERE window_config_id = ?
-        AND conversation_id = ?
-        AND start_ordinal = ?
-        AND end_ordinal = ?
+      WHERE deterministic_key = ?
     `,
     )
 
@@ -147,6 +162,9 @@ export function ensureWindowsForConversation(
         conversationId,
         'config',
         windowConfigId,
+        'messages',
+        start.id,
+        end.id,
         'ordinals',
         range.startOrdinal,
         range.endOrdinal,
@@ -163,12 +181,7 @@ export function ensureWindowsForConversation(
         range.endOrdinal - range.startOrdinal + 1,
         key,
       )
-      const row = selectWindow.get(
-        windowConfigId,
-        conversationId,
-        range.startOrdinal,
-        range.endOrdinal,
-      ) as { id: number }
+      const row = selectWindow.get(key) as { id: number }
       windowIds.push(row.id)
     }
     return windowIds
