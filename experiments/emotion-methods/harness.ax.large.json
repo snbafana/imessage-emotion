@@ -1,0 +1,101 @@
+{
+  "runName": "ax-large-private-window-context-benchmark",
+  "dataset": {
+    "kind": "private",
+    "privateConversationLimit": 8,
+    "maxMessagesPerConversation": 800
+  },
+  "windowing": [
+    { "size": 8, "stride": 4 },
+    { "size": 16, "stride": 8 },
+    { "size": 32, "stride": 16 }
+  ],
+  "selection": {
+    "strategy": "top_shift",
+    "maxWindowsPerConversation": 6,
+    "candidateScorer": "roberta_emotion"
+  },
+  "deterministic": [
+    "roberta_emotion",
+    "emoji_keyword_features"
+  ],
+  "llm": [
+    {
+      "name": "large_qwen_selected_8x4_prior_messages",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "runMode": "selected_windows",
+      "window": { "size": 8, "stride": 4 },
+      "contextMode": "prior_messages",
+      "contextMessages": 24,
+      "maxContextChars": 6000,
+      "maxConversations": 8,
+      "concurrency": 8,
+      "maxWindows": 48,
+      "maxTokens": 350
+    },
+    {
+      "name": "large_qwen_selected_16x8_prior_summary",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "runMode": "selected_windows",
+      "window": { "size": 16, "stride": 8 },
+      "contextMode": "prior_summary",
+      "maxConversations": 8,
+      "concurrency": 8,
+      "maxWindows": 48,
+      "maxTokens": 350
+    },
+    {
+      "name": "large_qwen_all_16x8_prior_summary_sample",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "runMode": "all_windows",
+      "window": { "size": 16, "stride": 8 },
+      "contextMode": "prior_summary",
+      "maxConversations": 8,
+      "maxWindowsPerConversation": 12,
+      "concurrency": 8,
+      "maxWindows": 96,
+      "maxTokens": 350
+    },
+    {
+      "name": "large_qwen_selected_32x16_prior_summary",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "runMode": "selected_windows",
+      "window": { "size": 32, "stride": 16 },
+      "contextMode": "prior_summary",
+      "maxConversations": 8,
+      "concurrency": 8,
+      "maxWindows": 48,
+      "maxTokens": 350
+    },
+    {
+      "name": "large_openai_selected_8x4_prior_messages_sample",
+      "provider": "openai",
+      "model": "gpt-4.1-nano",
+      "runMode": "selected_windows",
+      "window": { "size": 8, "stride": 4 },
+      "contextMode": "prior_messages",
+      "contextMessages": 24,
+      "maxContextChars": 6000,
+      "maxConversations": 8,
+      "concurrency": 8,
+      "maxWindows": 24,
+      "maxTokens": 350
+    },
+    {
+      "name": "large_qwen_whole_conversation_full",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "runMode": "whole_conversation",
+      "contextMode": "full_conversation",
+      "maxConversations": 8,
+      "maxContextChars": 18000,
+      "concurrency": 4,
+      "maxWindows": 8,
+      "maxTokens": 450
+    }
+  ]
+}
