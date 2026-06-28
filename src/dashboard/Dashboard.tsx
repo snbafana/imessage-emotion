@@ -31,6 +31,7 @@ export default function Dashboard() {
   const api = useMemo(() => getDashboardApi(), [])
   const [conversations, setConversations] = useState<ConversationView[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
+  const [runs, setRuns] = useState<RunView[]>([])
   const [run, setRun] = useState<RunView | null>(null)
   const [windows, setWindows] = useState<WindowView[]>([])
   const [selectedWindowId, setSelectedWindowId] = useState<string | null>(null)
@@ -106,6 +107,7 @@ export default function Dashboard() {
   const reloadRun = useCallback(
     async (conversation: ConversationView | null) => {
       setRun(null)
+      setRuns([])
       setWindows([])
       setSelectedWindowId(null)
       setContextMessages([])
@@ -126,7 +128,9 @@ export default function Dashboard() {
         if (nextRuns.length === 0 && conversation.latestRun) {
           nextRuns = [conversation.latestRun]
         }
-        setRun(latestRun(nextRuns))
+        const orderedRuns = [...nextRuns].sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
+        setRuns(orderedRuns)
+        setRun(latestRun(orderedRuns))
       } catch (error) {
         setRunError(error instanceof Error ? error.message : 'Could not load analysis runs.')
       } finally {
@@ -294,6 +298,11 @@ export default function Dashboard() {
     })
   }
 
+  function selectRun(runId: string) {
+    const nextRun = runs.find((item) => item.id === runId)
+    if (nextRun) setRun(nextRun)
+  }
+
   useEffect(() => {
     if (recomputingRef.current && !chatBusy) {
       recomputingRef.current = false
@@ -356,10 +365,13 @@ export default function Dashboard() {
         <div className="body">
           <EmotionTimeline
             run={run}
+            runs={runs}
             windows={windows}
             selectedId={selectedWindowId}
+            selectedRunId={run?.id ?? null}
             loading={runLoading}
             error={runError}
+            onSelectRun={selectRun}
             onSelectWindow={setSelectedWindowId}
           />
           <div className="lower-row">
@@ -394,11 +406,5 @@ function formatSyncStatus(status: SyncStatus | null): string | null {
     return `Syncing messages at row ${formatMessageCount(status.messages.cursor)}...`
   }
   if (status.contacts.state === 'syncing') return 'Syncing contacts...'
-  if (status.messages.importedMessages > 0 || status.contacts.resolvedHandles > 0) {
-    return [
-      `${formatMessageCount(status.messages.importedMessages)} messages imported`,
-      `${formatMessageCount(status.contacts.resolvedHandles)} contact handles resolved`,
-    ].join(' · ')
-  }
-  return `Synced through row ${formatMessageCount(status.messages.cursor)}`
+  return null
 }
