@@ -70,7 +70,7 @@
   font-family: var(--display);
   font-weight: 700;
   font-size: 22px;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .search {
@@ -120,6 +120,9 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 .person {
   display: flex;
@@ -168,12 +171,18 @@
 .person .name {
   font-weight: 600;
   font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .person .submeta {
   font-family: var(--mono);
   font-size: 10px;
   letter-spacing: 0.04em;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .spark {
@@ -217,23 +226,37 @@
   flex-direction: column;
   gap: 2px;
   flex: 1;
+  min-width: 0;
 }
 .header-bar .name {
   font-family: var(--display);
   font-weight: 700;
   font-size: 20px;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .header-bar .range {
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.03em;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .action-status {
   font-family: var(--mono);
   font-size: 10px;
   color: var(--cobalt);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.action-status.error {
+  color: oklch(0.52 0.2 27);
 }
 
 .header-actions {
@@ -310,8 +333,8 @@
 .panel-head h1 {
   font-family: var(--display);
   font-weight: 700;
-  font-size: 34px;
-  letter-spacing: -0.02em;
+  font-size: 28px;
+  letter-spacing: 0;
   margin: 0;
 }
 .panel-head .trend-note {
@@ -385,7 +408,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 210px;
+  min-height: 168px;
   border: 1px dashed var(--hair);
   border-radius: 10px;
   background: var(--surface-2);
@@ -460,7 +483,7 @@
   flex-direction: row;
   gap: 24px;
   flex: 1;
-  min-height: 420px;
+  min-height: 0;
 }
 .panel {
   display: flex;
@@ -549,7 +572,7 @@
 }
 .empty-panel,
 .empty-trace {
-  padding: 14px;
+  padding: 12px;
   border: 1px dashed var(--hair);
   border-radius: 9px;
   color: var(--muted);

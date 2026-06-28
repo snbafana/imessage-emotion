@@ -1,0 +1,267 @@
+{
+  "generatedAt": "2026-06-28T19:27:27.512Z",
+  "runName": "ax-top5-longest-roberta-llm-review",
+  "dataset": {
+    "conversationCount": 5,
+    "kinds": {
+      "private": 5
+    },
+    "conversations": [
+      {
+        "id": "private_c01",
+        "kind": "private",
+        "fullMessageCount": 8455,
+        "loadedMessageCount": 2000
+      },
+      {
+        "id": "private_c02",
+        "kind": "private",
+        "fullMessageCount": 4233,
+        "loadedMessageCount": 2000
+      },
+      {
+        "id": "private_c03",
+        "kind": "private",
+        "fullMessageCount": 3019,
+        "loadedMessageCount": 2000
+      },
+      {
+        "id": "private_c04",
+        "kind": "private",
+        "fullMessageCount": 2238,
+        "loadedMessageCount": 2000
+      },
+      {
+        "id": "private_c05",
+        "kind": "private",
+        "fullMessageCount": 2010,
+        "loadedMessageCount": 2000
+      }
+    ]
+  },
+  "anchors": [
+    "anger",
+    "disgust",
+    "fear",
+    "joy",
+    "neutral",
+    "sadness",
+    "surprise"
+  ],
+  "files": {
+    "full": "out/harness-ax-top5-results.json",
+    "review16x8": "out/top5-window-review-16x8.jsonl",
+    "review8x4Qwen": "out/top5-window-review-8x4-qwen.jsonl"
+  },
+  "deterministic": [
+    {
+      "name": "roberta_emotion",
+      "window": {
+        "size": 8,
+        "stride": 4
+      },
+      "totalWindows": 2500,
+      "avgWindowMs": 27.1,
+      "dominantCounts": {
+        "joy": 360,
+        "surprise": 1094,
+        "neutral": 762,
+        "fear": 40,
+        "sadness": 125,
+        "anger": 112,
+        "disgust": 7
+      }
+    },
+    {
+      "name": "emoji_keyword_features",
+      "window": {
+        "size": 8,
+        "stride": 4
+      },
+      "totalWindows": 2500,
+      "avgWindowMs": 0.2,
+      "dominantCounts": {
+        "joy": 627,
+        "disgust": 543,
+        "neutral": 579,
+        "anger": 422,
+        "fear": 90,
+        "sadness": 168,
+        "surprise": 71
+      }
+    },
+    {
+      "name": "roberta_emotion",
+      "window": {
+        "size": 16,
+        "stride": 8
+      },
+      "totalWindows": 1250,
+      "avgWindowMs": 54.4,
+      "dominantCounts": {
+        "joy": 172,
+        "surprise": 558,
+        "neutral": 373,
+        "fear": 26,
+        "disgust": 3,
+        "anger": 63,
+        "sadness": 55
+      }
+    },
+    {
+      "name": "emoji_keyword_features",
+      "window": {
+        "size": 16,
+        "stride": 8
+      },
+      "totalWindows": 1250,
+      "avgWindowMs": 0.2,
+      "dominantCounts": {
+        "neutral": 285,
+        "joy": 346,
+        "disgust": 423,
+        "anger": 103,
+        "fear": 41,
+        "sadness": 40,
+        "surprise": 12
+      }
+    },
+    {
+      "name": "roberta_emotion",
+      "window": {
+        "size": 32,
+        "stride": 16
+      },
+      "totalWindows": 625,
+      "avgWindowMs": 62,
+      "dominantCounts": {
+        "joy": 78,
+        "surprise": 269,
+        "neutral": 202,
+        "fear": 22,
+        "disgust": 1,
+        "anger": 28,
+        "sadness": 25
+      }
+    },
+    {
+      "name": "emoji_keyword_features",
+      "window": {
+        "size": 32,
+        "stride": 16
+      },
+      "totalWindows": 625,
+      "avgWindowMs": 0.2,
+      "dominantCounts": {
+        "joy": 204,
+        "neutral": 131,
+        "disgust": 216,
+        "anger": 48,
+        "surprise": 2,
+        "sadness": 9,
+        "fear": 15
+      }
+    }
+  ],
+  "llm": [
+    {
+      "name": "top5_qwen_selected_16x8_prior_summary",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "runMode": "selected_windows",
+      "contextMode": "prior_summary",
+      "window": {
+        "size": 16,
+        "stride": 8
+      },
+      "windowCount": 50,
+      "okCount": 50,
+      "errorCount": 0,
+      "wallMs": 11601.3,
+      "avgLatencyMs": 1796.2,
+      "avgConfidence": 0.9,
+      "dominantCounts": {
+        "joy": 21,
+        "fear": 1,
+        "neutral": 11,
+        "surprise": 12,
+        "sadness": 2,
+        "anger": 3
+      }
+    },
+    {
+      "name": "top5_mistral_selected_16x8_prior_summary",
+      "provider": "openrouter",
+      "model": "mistralai/mistral-small-2603",
+      "runMode": "selected_windows",
+      "contextMode": "prior_summary",
+      "window": {
+        "size": 16,
+        "stride": 8
+      },
+      "windowCount": 50,
+      "okCount": 50,
+      "errorCount": 0,
+      "wallMs": 12687.6,
+      "avgLatencyMs": 1943.8,
+      "avgConfidence": 0.8,
+      "dominantCounts": {
+        "joy": 17,
+        "neutral": 19,
+        "surprise": 8,
+        "anger": 3,
+        "sadness": 2,
+        "disgust": 1
+      }
+    },
+    {
+      "name": "top5_openai_selected_16x8_prior_summary",
+      "provider": "openai",
+      "model": "gpt-4.1-nano",
+      "runMode": "selected_windows",
+      "contextMode": "prior_summary",
+      "window": {
+        "size": 16,
+        "stride": 8
+      },
+      "windowCount": 50,
+      "okCount": 50,
+      "errorCount": 0,
+      "wallMs": 13645.1,
+      "avgLatencyMs": 2041,
+      "avgConfidence": 0.7,
+      "dominantCounts": {
+        "neutral": 33,
+        "fear": 2,
+        "joy": 9,
+        "surprise": 6
+      }
+    },
+    {
+      "name": "top5_qwen_selected_8x4_prior_messages",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "runMode": "selected_windows",
+      "contextMode": "prior_messages",
+      "window": {
+        "size": 8,
+        "stride": 4
+      },
+      "windowCount": 50,
+      "okCount": 50,
+      "errorCount": 0,
+      "wallMs": 9823.8,
+      "avgLatencyMs": 1509.2,
+      "avgConfidence": 0.9,
+      "dominantCounts": {
+        "joy": 18,
+        "fear": 4,
+        "disgust": 2,
+        "neutral": 9,
+        "anger": 10,
+        "surprise": 6,
+        "sadness": 1
+      }
+    }
+  ]
+}

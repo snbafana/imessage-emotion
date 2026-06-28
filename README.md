@@ -23,8 +23,9 @@ the machine.
    deduping contacts/conversations/messages. Each message gets a deterministic
    `conversation_ordinal` (chronological, with rowid/guid tie-breakers).
 2. **Analyze** — an analysis *run* slices a conversation into run-owned
-   *windows* (context + focal message ranges) and scores each with a baseline
-   lexical scorer (warmth / joy / trust / stress / friction / sadness).
+   *windows* (context + focal message ranges) and scores each on the Ekman
+   anchors (anger / disgust / fear / joy / neutral / sadness / surprise) — a
+   lexical baseline or the Ax LLM scorer (`agent/tools/score_window`).
 3. **Detect shifts** — windows are compared against a rolling baseline to flag
    warmer/tenser shifts and surface the strongest drivers.
 4. **Explore** — the dashboard shows the emotion timeline (colored composition

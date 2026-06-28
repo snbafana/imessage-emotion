@@ -23,6 +23,7 @@ import {
   type WindowView,
 } from './data'
 import { RecalcIcon } from './icons'
+import type { SyncStatus } from '../lib/api/types'
 import './dashboard.css'
 
 export default function Dashboard() {
@@ -41,6 +42,8 @@ export default function Dashboard() {
   const [runError, setRunError] = useState<string | null>(null)
   const [windowError, setWindowError] = useState<string | null>(null)
   const [actionStatus, setActionStatus] = useState<string | null>(null)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === activeId) ?? null,
@@ -50,11 +53,14 @@ export default function Dashboard() {
     () => windows.find((window) => window.id === selectedWindowId) ?? null,
     [selectedWindowId, windows],
   )
+  const isSyncing =
+    syncStatus?.messages.state === 'syncing' || syncStatus?.contacts.state === 'syncing'
+  const syncStatusLine = syncError ?? actionStatus ?? formatSyncStatus(syncStatus)
 
   const reloadConversations = useCallback(async () => {
     if (!hasConversationApi(api)) {
       setConversationLoading(false)
-      setConversationError('window.ipcRenderer.listConversations is not available.')
+      setConversationError('Dashboard API is not available.')
       return
     }
 
@@ -118,7 +124,7 @@ export default function Dashboard() {
 
       if (!activeRun) return
       if (!api?.getRunWindows) {
-        setRunError('window.ipcRenderer.getRunWindows is not available.')
+        setRunError('Run window API is not available.')
         return
       }
 
@@ -147,6 +153,32 @@ export default function Dashboard() {
   useEffect(() => {
     void reloadWindows(run)
   }, [reloadWindows, run])
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadSyncStatus() {
+      if (!api?.getSyncStatus) return
+      try {
+        const nextStatus = await api.getSyncStatus()
+        if (!cancelled) {
+          setSyncStatus(nextStatus)
+          setSyncError(null)
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSyncError(error instanceof Error ? error.message : 'Could not load sync status.')
+        }
+      }
+    }
+
+    void loadSyncStatus()
+    const interval = window.setInterval(() => void loadSyncStatus(), 2_000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [api])
 
   useEffect(() => {
     let cancelled = false
@@ -185,10 +217,19 @@ export default function Dashboard() {
 
   async function syncMessages() {
     if (!api?.syncMessagesNow) return
-    setActionStatus('Syncing messages...')
-    await api.syncMessagesNow()
-    await reloadConversations()
-    setActionStatus('Messages synced.')
+    setActionStatus('Syncing messages and contacts...')
+    setSyncError(null)
+    try {
+      const messageStatus = await api.syncMessagesNow()
+      setSyncStatus(messageStatus)
+      const finalStatus = api.syncContactsNow ? await api.syncContactsNow() : messageStatus
+      setSyncStatus(finalStatus)
+      await reloadConversations()
+      setActionStatus(formatSyncStatus(finalStatus))
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : 'Sync failed.')
+      setActionStatus(null)
+    }
   }
 
   async function createBaselineRun() {
@@ -230,12 +271,18 @@ export default function Dashboard() {
                 ? `${formatDateRange(selectedConversation.firstMessageAt, selectedConversation.lastMessageAt)} · ${formatMessageCount(selectedConversation.messageCount)} messages · ${selectedConversation.participantSummary}`
                 : 'Sync messages to populate the dashboard'}
             </span>
-            {actionStatus && <span className="action-status">{actionStatus}</span>}
+            {syncStatusLine && (
+              <span className={`action-status${syncError ? ' error' : ''}`}>{syncStatusLine}</span>
+            )}
           </div>
           <div className="header-actions">
-            <Button className="recalc secondary" disabled={!api?.syncMessagesNow} onClick={syncMessages}>
+            <Button
+              className="recalc secondary"
+              disabled={!api?.syncMessagesNow || isSyncing}
+              onClick={syncMessages}
+            >
               <RecalcIcon />
-              Sync Messages
+              {isSyncing ? 'Syncing...' : 'Sync Data'}
             </Button>
             <Button
               className="recalc"
@@ -277,4 +324,22 @@ export default function Dashboard() {
       </div>
     </div>
   )
+}
+
+function formatSyncStatus(status: SyncStatus | null): string | null {
+  if (!status) return null
+  const messageError = status.messages.error
+  const contactsError = status.contacts.error
+  if (messageError || contactsError) return messageError ?? contactsError ?? null
+  if (status.messages.state === 'syncing') {
+    return `Syncing messages at row ${formatMessageCount(status.messages.cursor)}...`
+  }
+  if (status.contacts.state === 'syncing') return 'Syncing contacts...'
+  if (status.messages.importedMessages > 0 || status.contacts.resolvedHandles > 0) {
+    return [
+      `${formatMessageCount(status.messages.importedMessages)} messages imported`,
+      `${formatMessageCount(status.contacts.resolvedHandles)} contact handles resolved`,
+    ].join(' · ')
+  }
+  return `Synced through row ${formatMessageCount(status.messages.cursor)}`
 }

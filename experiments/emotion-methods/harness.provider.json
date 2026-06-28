@@ -1,0 +1,54 @@
+{
+  "runName": "provider-selected-window-benchmark",
+  "dataset": {
+    "kind": "private",
+    "privateConversationLimit": 2,
+    "maxMessagesPerConversation": 600
+  },
+  "windowing": [
+    { "size": 8, "stride": 4 }
+  ],
+  "selection": {
+    "strategy": "top_shift",
+    "maxWindowsPerConversation": 4,
+    "candidateScorer": "emoji_keyword_features"
+  },
+  "deterministic": [
+    "emoji_keyword_features",
+    "vader"
+  ],
+  "hf": [
+    {
+      "name": "goemotions_student",
+      "model": "joeddav/distilbert-base-uncased-go-emotions-student",
+      "mapping": "goemotions",
+      "enabled": false
+    }
+  ],
+  "llm": [
+    {
+      "name": "openai_gpt_4_1_nano",
+      "provider": "openai",
+      "model": "gpt-4.1-nano",
+      "concurrency": 8,
+      "maxWindows": 8,
+      "jsonMode": true
+    },
+    {
+      "name": "openrouter_qwen_next_nitro",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "concurrency": 4,
+      "maxWindows": 8,
+      "jsonMode": true
+    },
+    {
+      "name": "openrouter_mistral_small",
+      "provider": "openrouter",
+      "model": "mistralai/mistral-small-2603",
+      "concurrency": 4,
+      "maxWindows": 8,
+      "jsonMode": true
+    }
+  ]
+}

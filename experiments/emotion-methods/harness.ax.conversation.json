@@ -1,0 +1,34 @@
+{
+  "runName": "ax-single-conversation-heatmap-series",
+  "dataset": {
+    "kind": "private",
+    "privateConversationLimit": 1,
+    "maxMessagesPerConversation": 800
+  },
+  "windowing": [
+    { "size": 16, "stride": 8 }
+  ],
+  "selection": {
+    "strategy": "top_shift",
+    "maxWindowsPerConversation": 6,
+    "candidateScorer": "roberta_emotion"
+  },
+  "deterministic": [
+    "roberta_emotion",
+    "emoji_keyword_features"
+  ],
+  "llm": [
+    {
+      "name": "conversation_qwen_all_16x8_prior_summary",
+      "provider": "openrouter",
+      "model": "qwen/qwen3-next-80b-a3b-instruct:nitro",
+      "runMode": "all_windows",
+      "window": { "size": 16, "stride": 8 },
+      "contextMode": "prior_summary",
+      "maxConversations": 1,
+      "concurrency": 8,
+      "maxWindows": 120,
+      "maxTokens": 350
+    }
+  ]
+}

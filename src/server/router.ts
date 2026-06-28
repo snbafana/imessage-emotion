@@ -6,9 +6,7 @@ import { getRunWindows, listRuns } from '@/lib/api/runs'
 import { getWindowMessages } from '@/lib/api/messages'
 import { createBaselineRun } from '@/lib/emotion/run-baseline'
 import { answerConversation } from '@/lib/chat/answer'
-import { getLastImportedRowid, importBatch } from '@/lib/import/import-messages'
-import { DEFAULT_CHAT_DB_PATH, LocalIMessageReader } from '@/lib/imessage/reader'
-import type { SyncStatus } from '@/lib/api/types'
+import { getServerSyncEngine } from '@/lib/sync/server-sync'
 
 const sliceInput = z.enum(['all', 'full', 'context', 'focal'])
 
@@ -29,13 +27,6 @@ const askInput = z.object({
   runId: z.number(),
   windowId: z.number(),
 })
-
-function currentSyncStatus(): SyncStatus {
-  return {
-    messages: { state: 'idle', cursor: getLastImportedRowid(getDb()), importedMessages: 0 },
-    contacts: { state: 'idle', scannedContacts: 0, resolvedHandles: 0 },
-  }
-}
 
 export const appRouter = router({
   listConversations: publicProcedure.query(() => listConversations(getDb())),
@@ -66,30 +57,11 @@ export const appRouter = router({
     .input(askInput)
     .mutation(({ input }) => answerConversation(getDb(), input)),
 
-  syncStatus: publicProcedure.query(() => currentSyncStatus()),
+  syncStatus: publicProcedure.query(() => getServerSyncEngine(getDb()).getStatus()),
 
-  syncMessages: publicProcedure.mutation((): SyncStatus => {
-    const db = getDb()
-    const cursor = getLastImportedRowid(db)
-    const reader = new LocalIMessageReader(
-      process.env.IMESSAGE_CHAT_DB_PATH ?? DEFAULT_CHAT_DB_PATH,
-    )
-    try {
-      const batch = reader.buildBatch(cursor, 1_000)
-      const result = importBatch(db, batch)
-      return {
-        messages: {
-          state: 'idle',
-          cursor: result.cursor,
-          importedMessages: result.importedMessages,
-          hasMore: batch.fetchedCount >= 1_000,
-        },
-        contacts: { state: 'idle', scannedContacts: 0, resolvedHandles: 0 },
-      }
-    } finally {
-      reader.close()
-    }
-  }),
+  syncMessages: publicProcedure.mutation(() => getServerSyncEngine(getDb()).syncMessages()),
+
+  syncContacts: publicProcedure.mutation(() => getServerSyncEngine(getDb()).syncContacts()),
 })
 
 export type AppRouter = typeof appRouter
