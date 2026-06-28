@@ -9,8 +9,12 @@ type RunRow = {
   status: string
   started_at: number
   completed_at: number | null
+  window_config_json: string | null
+  scorer_config_json: string | null
   summary_json: string | null
   window_count: number
+  scored_window_count: number
+  error: string | null
 }
 
 type WindowRow = {
@@ -44,8 +48,12 @@ function mapRun(row: RunRow): RunSummary {
     status: mapStatus(row.status),
     startedAt: row.started_at,
     completedAt: row.completed_at,
+    windowConfig: parseJsonRecord(row.window_config_json),
+    scorerConfig: parseJsonRecord(row.scorer_config_json),
     summary: parseJsonRecord(row.summary_json),
     windowCount: row.window_count,
+    scoredWindowCount: row.scored_window_count,
+    error: row.error,
   }
 }
 
@@ -91,8 +99,12 @@ export function listRuns(db: AppDatabase, conversationId: number): RunSummary[] 
         ar.status,
         ar.started_at,
         ar.completed_at,
+        ar.window_config_json,
+        ar.scorer_config_json,
         ar.summary_json,
-        COUNT(w.id) AS window_count
+        COUNT(w.id) AS window_count,
+        COALESCE(SUM(CASE WHEN w.status = 'completed' THEN 1 ELSE 0 END), 0) AS scored_window_count,
+        ar.error
       FROM analysis_runs ar
       LEFT JOIN windows w ON w.run_id = ar.id
       WHERE ar.conversation_id = ?

@@ -1,24 +1,31 @@
+import { Button } from '@base-ui/react/button'
 import type { EmotionKey, RunView, WindowView } from './data'
-import { EMOTIONS, gradientFor, runStateLabel, timelineBlocks } from './data'
-import { NEGATIVE_ANCHORS, POSITIVE_ANCHORS } from '../lib/emotion/anchors'
+import { EMOTIONS, SCORE_KEYS, gradientFor, runStateLabel, timelineBlocks } from './data'
 
-// Per-window valence: joy lifts, anger/disgust/fear/sadness drop, neutral/
-// surprise are flat. ~[-1, 1].
-function windowValence(composition: { emotion: EmotionKey; weight: number }[]): number {
-  return composition.reduce((sum, { emotion, weight }) => {
-    if (POSITIVE_ANCHORS.has(emotion)) return sum + weight
-    if (NEGATIVE_ANCHORS.has(emotion)) return sum - weight
-    return sum
-  }, 0)
+const PLOT_WIDTH = 1000
+const PLOT_HEIGHT = 210
+const PLOT_TOP = 16
+const PLOT_BOTTOM = 190
+
+type EmotionSeries = {
+  emotion: EmotionKey
+  path: string
+  max: number
+  average: number
+  values: number[]
 }
 
-// Smooth Catmull-Rom path through per-window valence (high-fidelity overlay on
-// the discrete blocks) in a 1000x210 non-scaling viewBox.
-function valencePath(valences: number[]): string {
-  if (valences.length === 0) return ''
-  const points: [number, number][] = valences.map((v, i) => [
-    ((i + 0.5) / valences.length) * 1000,
-    Math.min(198, Math.max(12, 110 - v * 82)),
+function scoreY(value: number): number {
+  return PLOT_BOTTOM - clamp01(value) * (PLOT_BOTTOM - PLOT_TOP)
+}
+
+// Smooth Catmull-Rom path through per-window scores in a fixed non-scaling
+// viewBox. This keeps sparse large-window runs and dense granular runs readable.
+function scorePath(values: number[]): string {
+  if (values.length === 0) return ''
+  const points: [number, number][] = values.map((value, i) => [
+    values.length === 1 ? PLOT_WIDTH / 2 : (i / (values.length - 1)) * PLOT_WIDTH,
+    scoreY(value),
   ])
   if (points.length === 1) return `M${points[0][0]},${points[0][1]} L1000,${points[0][1]}`
   let d = `M${points[0][0]},${points[0][1]}`
@@ -36,39 +43,90 @@ function valencePath(valences: number[]): string {
   return d
 }
 
+function emotionSeries(windows: WindowView[]): EmotionSeries[] {
+  return SCORE_KEYS.map((emotion) => {
+    const values = windows.map((window) => clamp01(window.scores[emotion] ?? 0))
+    const total = values.reduce((sum, value) => sum + value, 0)
+    return {
+      emotion,
+      path: scorePath(values),
+      max: Math.max(0, ...values),
+      average: values.length === 0 ? 0 : total / values.length,
+      values,
+    }
+  })
+}
+
+function selectedX(index: number, count: number): number {
+  if (index < 0) return -1
+  if (count <= 1) return PLOT_WIDTH / 2
+  return (index / (count - 1)) * PLOT_WIDTH
+}
+
+function runMeta(run: RunView): string {
+  const scored = run.scoredWindowCount ?? run.windowCount ?? 0
+  const total = run.windowCount ?? scored
+  return `${scored}/${total} windows`
+}
+
 export default function EmotionTimeline({
   run,
+  runs,
   windows,
   selectedId,
+  selectedRunId,
   loading,
   error,
+  onSelectRun,
   onSelectWindow,
 }: {
   run: RunView | null
+  runs: RunView[]
   windows: WindowView[]
   selectedId: string | null
+  selectedRunId: string | null
   loading: boolean
   error: string | null
+  onSelectRun: (id: string) => void
   onSelectWindow: (id: string) => void
 }) {
   const stateLabel = runStateLabel(run, windows)
   const blocks = timelineBlocks(windows)
   const hasScores = blocks.some((block) => block.composition.length > 0)
-  const valenceLine =
-    hasScores && blocks.length > 1 ? valencePath(blocks.map((b) => windowValence(b.composition))) : ''
+  const series = emotionSeries(windows)
+  const selectedIndex = blocks.findIndex((block) => block.window.id === selectedId)
+  const markerX = selectedX(selectedIndex, blocks.length)
 
   return (
     <section className="timeline-panel">
       <div className="panel-head">
         <div className="heading">
-          <span className="label">Emotional timeline</span>
           <div className="title-row">
-            <h1>{stateLabel}</h1>
-            <span className={`trend-note status-${run?.state ?? 'no-run'}`}>
-              {run ? `${run.methodKey} · ${run.status}` : 'create a baseline to begin'}
-            </span>
+            <h1>{run ? 'Emotion graph' : stateLabel}</h1>
+            {run && (
+              <span className={`trend-note status-${run.state}`}>
+                {run.scaleLabel} · {run.configLabel} · {runMeta(run)}
+              </span>
+            )}
           </div>
         </div>
+        {runs.length > 1 && (
+          <div className="run-switcher" aria-label="Baseline runs">
+            {runs.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`run-tab scale-${item.scale}`}
+                aria-pressed={item.id === selectedRunId}
+                data-selected={item.id === selectedRunId ? '' : undefined}
+                onClick={() => onSelectRun(item.id)}
+              >
+                <span className="run-kind">{item.scaleLabel}</span>
+                <span className="run-count">{runMeta(item)}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="chart">
@@ -88,11 +146,11 @@ export default function EmotionTimeline({
               {blocks.map((block) => {
                 const dominant = block.window.dominant ?? block.composition[0]?.emotion ?? null
                 return (
-                  <button
+                  <Button
                     key={block.window.id}
                     className={`block window-block${block.window.id === selectedId ? ' selected' : ''}`}
                     style={{
-                      height: `${24 + block.intensity * 166}px`,
+                      height: `${30 + block.intensity * 160}px`,
                       background:
                         block.window.state === 'failed'
                           ? '#d9d9dd'
@@ -100,20 +158,62 @@ export default function EmotionTimeline({
                     }}
                     onClick={() => onSelectWindow(block.window.id)}
                     title={`${block.window.label} · ${dominant ? EMOTIONS[dominant].label : 'no score yet'}`}
+                    aria-label={`${block.window.label}, ${dominant ? EMOTIONS[dominant].label : 'no score yet'}`}
                   >
                     <span>{block.window.ordinal}</span>
-                  </button>
+                  </Button>
                 )
               })}
 
-              {valenceLine ? (
+              {hasScores ? (
                 <div className="line-overlay">
-                  <svg width="100%" height="210" viewBox="0 0 1000 210" preserveAspectRatio="none" fill="none">
-                    <path d={valenceLine} stroke="#fff" strokeWidth={6} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-                    <path d={valenceLine} stroke="#0a0a0b" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                  <svg
+                    width="100%"
+                    height={PLOT_HEIGHT}
+                    viewBox={`0 0 ${PLOT_WIDTH} ${PLOT_HEIGHT}`}
+                    preserveAspectRatio="none"
+                    fill="none"
+                  >
+                    {series.map((item) => (
+                      <path
+                        key={item.emotion}
+                        d={item.path}
+                        stroke={EMOTIONS[item.emotion].color}
+                        strokeWidth={item.emotion === 'neutral' ? 1.7 : 2.35}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeDasharray={item.emotion === 'neutral' ? '4 7' : undefined}
+                        opacity={item.max > 0.01 ? 0.86 : 0.22}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    ))}
+                    {markerX >= 0 &&
+                      series.map((item) => (
+                        <circle
+                          key={`${item.emotion}-marker`}
+                          cx={markerX}
+                          cy={scoreY(item.values[selectedIndex] ?? 0)}
+                          r={3.2}
+                          fill={EMOTIONS[item.emotion].color}
+                          stroke="#fff"
+                          strokeWidth={1.4}
+                          opacity={item.max > 0.01 ? 0.95 : 0.25}
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      ))}
                   </svg>
                 </div>
               ) : null}
+            </div>
+
+            <div className="emotion-legend">
+              {series.map((item) => (
+                <span key={item.emotion} className="legend-item">
+                  <span className="legend-swatch" style={{ background: EMOTIONS[item.emotion].color }} />
+                  <span className="legend-name">{EMOTIONS[item.emotion].label}</span>
+                  <span className="legend-value">{Math.round(item.average * 100)}%</span>
+                </span>
+              ))}
             </div>
 
             <div className="axis">
@@ -130,4 +230,8 @@ export default function EmotionTimeline({
 
 function TimelineState({ label, tone = 'neutral' }: { label: string; tone?: 'neutral' | 'error' }) {
   return <div className={`timeline-state ${tone}`}>{label}</div>
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value))
 }

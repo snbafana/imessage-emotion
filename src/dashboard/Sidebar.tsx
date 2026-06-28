@@ -1,7 +1,8 @@
 import { Avatar } from '@base-ui/react/avatar'
+import { Button } from '@base-ui/react/button'
 import { Input } from '@base-ui/react/input'
 import type { ConversationView } from './data'
-import { formatMessageCount, runStateLabel } from './data'
+import { formatMessageCount } from './data'
 import { SearchIcon } from './icons'
 
 export default function Sidebar({
@@ -54,7 +55,7 @@ export default function Sidebar({
 
       <div className="people">
         {conversations.map((conversation) => (
-          <button
+          <Button
             key={conversation.id}
             className={`person${conversation.id === activeId ? ' active' : ''}`}
             onClick={() => onSelect(conversation.id)}
@@ -64,12 +65,9 @@ export default function Sidebar({
             </Avatar.Root>
             <div className="meta">
               <span className="name">{conversation.title}</span>
-              <span className="submeta">
-                {formatMessageCount(conversation.messageCount)} msgs ·{' '}
-                {runStateLabel(conversation.latestRun, [])}
-              </span>
+              <span className="submeta">{formatMessageCount(conversation.messageCount)} msgs</span>
             </div>
-          </button>
+          </Button>
         ))}
       </div>
     </aside>

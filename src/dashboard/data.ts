@@ -33,6 +33,7 @@ export const SCORE_KEYS = EKMAN_ANCHORS
 export type ScoreKey = Anchor
 export type Scores = Partial<Record<ScoreKey, number>>
 export type RunState = 'no-run' | 'pending' | 'scored' | 'failed' | 'unknown'
+export type RunScale = 'granular' | 'large' | 'standard' | 'custom'
 export type MessageSlice = WindowMessageSlice
 
 export type ConversationSummary = Partial<ApiConversationSummary> & {
@@ -66,6 +67,12 @@ export type RunSummary = Partial<ApiRunSummary> & {
   error?: string | null
   summaryJson?: unknown
   summary_json?: unknown
+  windowConfig?: unknown
+  window_config?: unknown
+  window_config_json?: unknown
+  scorerConfig?: unknown
+  scorer_config?: unknown
+  scorer_config_json?: unknown
   windowCount?: number
   window_count?: number
   scoredWindowCount?: number
@@ -138,12 +145,25 @@ export type RunView = {
   methodKey: string
   status: string
   state: RunState
+  scale: RunScale
+  scaleLabel: string
+  configLabel: string
   startedAt: number | null
   completedAt: number | null
   error: string | null
+  windowConfig: RunWindowConfigView
+  scorerConfig: Record<string, unknown>
   summary: Record<string, unknown>
   windowCount: number | null
   scoredWindowCount: number | null
+}
+
+export type RunWindowConfigView = {
+  mode: string | null
+  contextMessages: number | null
+  focalMessages: number | null
+  stride: number | null
+  minFocalMessages: number | null
 }
 
 export type WindowView = {
@@ -237,6 +257,13 @@ export function normalizeRuns(input: unknown): RunView[] {
     const rawId = getId(row, ['id', 'runId', 'run_id'])
     const status = getString(row, ['status']) ?? 'unknown'
     const summary = parseObject(getValue(row, ['summaryJson', 'summary_json', 'summary']))
+    const windowConfig = normalizeRunWindowConfig(
+      getValue(row, ['windowConfig', 'window_config', 'window_config_json']),
+    )
+    const scorerConfig = parseObject(
+      getValue(row, ['scorerConfig', 'scorer_config', 'scorer_config_json']),
+    )
+    const scale = classifyRunScale(windowConfig)
 
     return {
       id: String(rawId),
@@ -245,9 +272,14 @@ export function normalizeRuns(input: unknown): RunView[] {
       methodKey: getString(row, ['methodKey', 'method_key']) ?? 'baseline-v1',
       status,
       state: normalizeRunState(status),
+      scale,
+      scaleLabel: runScaleLabel(scale),
+      configLabel: formatRunConfig(windowConfig),
       startedAt: getTime(row, ['startedAt', 'started_at']),
       completedAt: getTime(row, ['completedAt', 'completed_at']),
       error: getString(row, ['error']) ?? null,
+      windowConfig,
+      scorerConfig,
       summary,
       windowCount: getNumber(row, ['windowCount', 'window_count']),
       scoredWindowCount: getNumber(row, ['scoredWindowCount', 'scored_window_count']),
@@ -500,6 +532,53 @@ function parseObject(value: unknown): JsonRecord {
   return asRecord(value)
 }
 
+function normalizeRunWindowConfig(value: unknown): RunWindowConfigView {
+  const source = parseObject(value)
+  return {
+    mode: getString(source, ['mode']),
+    contextMessages: getNumber(source, ['contextMessages', 'context_messages']),
+    focalMessages: getNumber(source, ['focalMessages', 'focal_messages']),
+    stride: getNumber(source, ['stride']),
+    minFocalMessages: getNumber(source, ['minFocalMessages', 'min_focal_messages']),
+  }
+}
+
+function classifyRunScale(config: RunWindowConfigView): RunScale {
+  if (config.focalMessages != null && config.focalMessages <= 12) return 'granular'
+  if (config.stride != null && config.stride <= 6) return 'granular'
+  if (config.focalMessages != null && config.focalMessages >= 75) return 'large'
+  if (config.contextMessages != null && config.contextMessages >= 100) return 'large'
+  if (config.stride != null && config.stride >= 75) return 'large'
+  if (
+    config.mode === 'comparative-message-count' &&
+    config.contextMessages === 100 &&
+    config.focalMessages === 50 &&
+    config.stride === 50
+  ) {
+    return 'standard'
+  }
+  return 'custom'
+}
+
+function runScaleLabel(scale: RunScale): string {
+  if (scale === 'granular') return 'Granular'
+  if (scale === 'large') return 'Large windows'
+  if (scale === 'standard') return 'Standard'
+  return 'Custom'
+}
+
+function formatRunConfig(config: RunWindowConfigView): string {
+  const mode = config.mode === 'comparative-message-count' ? 'comparative' : 'absolute'
+  const parts = [
+    config.focalMessages == null ? null : `${config.focalMessages} focal`,
+    config.stride == null ? null : `${config.stride} stride`,
+    config.contextMessages == null || config.contextMessages === 0
+      ? null
+      : `${config.contextMessages} context`,
+  ].filter(Boolean)
+  return parts.length > 0 ? `${mode} · ${parts.join(' · ')}` : 'window config unavailable'
+}
+
 function getValue(row: JsonRecord, keys: string[]): unknown {
   for (const key of keys) {
     if (row[key] !== undefined) return row[key]
@@ -595,4 +674,3 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;')
 }
-
