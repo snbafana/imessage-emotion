@@ -355,6 +355,13 @@ export default function Dashboard() {
               {isSyncing ? 'Syncing...' : 'Sync Data'}
             </Button>
             <Button
+              className="recalc secondary"
+              disabled={windows.length === 0 && !chatBusy}
+              onClick={() => setShowControlRoom(true)}
+            >
+              Control room
+            </Button>
+            <Button
               className="recalc"
               disabled={!selectedConversation || chatBusy}
               onClick={recomputeWithAx}
@@ -398,7 +405,13 @@ export default function Dashboard() {
       </div>
 
       {showControlRoom && (
-        <ControlRoom agent={chat} api={api} title={selectedConversation?.title} onClose={() => setShowControlRoom(false)} />
+        <ControlRoom
+          agent={chat}
+          api={api}
+          windows={windows}
+          title={selectedConversation?.title}
+          onClose={() => setShowControlRoom(false)}
+        />
       )}
     </div>
   )

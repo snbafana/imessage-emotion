@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { EveMessageData, UseEveAgentHelpers } from 'eve/react'
 import { ANCHOR_DISPLAY, EKMAN_ANCHORS, type Anchor } from '../lib/emotion/anchors'
-import { getWindowMessages, type DashboardApi, type MessageView } from './data'
+import { getWindowMessages, type DashboardApi, type MessageView, type WindowView } from './data'
 
 type CardState = 'queued' | 'reading' | 'scored' | 'error'
 type Card = {
@@ -67,6 +67,30 @@ function deriveCards(agent: UseEveAgentHelpers<EveMessageData>): Card[] {
         }
       }
       return { id, ordinal: pl.ordinal, focal: pl.focal, state, scores, dominant, confidence, rationale }
+    })
+    .sort((a, b) => a.ordinal - b.ordinal)
+}
+
+// Fallback when there's no live recompute in the session: render the current
+// run's already-scored windows so the control room is a view you can open anytime.
+function cardsFromWindows(windows: WindowView[]): Card[] {
+  return windows
+    .map((w) => {
+      const result = w.result as { confidence?: unknown; rationale?: unknown }
+      const scored = w.dominant != null && Object.keys(w.scores ?? {}).length > 0
+      const rationale =
+        (typeof result?.rationale === 'string' ? result.rationale : undefined) ??
+        (w.summary && w.summary !== 'No result summary yet.' ? w.summary : undefined)
+      return {
+        id: Number(w.rawId),
+        ordinal: w.ordinal,
+        focal: `${w.focalStartOrdinal}-${w.focalEndOrdinal}`,
+        state: (w.error ? 'error' : scored ? 'scored' : 'queued') as CardState,
+        scores: scored ? (w.scores as Record<string, number>) : undefined,
+        dominant: w.dominant ?? undefined,
+        confidence: typeof result?.confidence === 'number' ? result.confidence : undefined,
+        rationale,
+      }
     })
     .sort((a, b) => a.ordinal - b.ordinal)
 }
@@ -142,18 +166,31 @@ function WindowCard({ card, focal }: { card: Card; focal: MessageView[] | undefi
 export default function ControlRoom({
   agent,
   api,
+  windows = [],
   title,
   onClose,
 }: {
   agent: UseEveAgentHelpers<EveMessageData>
   api: DashboardApi | null
+  windows?: WindowView[]
   title?: string
   onClose: () => void
 }) {
-  const cards = deriveCards(agent)
+  const liveCards = deriveCards(agent)
+  // Live recompute stream wins; otherwise show the current run's windows.
+  const cards = liveCards.length > 0 ? liveCards : cardsFromWindows(windows)
   const scored = cards.filter((c) => c.state === 'scored').length
   const reading = cards.filter((c) => c.state === 'reading').length
   const busy = agent.status === 'submitted' || agent.status === 'streaming'
+
+  // Esc closes the control room.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
 
   // Pull each planned window's focal messages so every card can show "what folks
   // are saying" as soon as the window appears — independent of the scorer.
@@ -174,8 +211,11 @@ export default function ControlRoom({
       <div className="cr-topbar">
         <div className="cr-head">
           <div className="cr-title-row">
-            <span className="cr-title">Recomputing {title ?? 'conversation'}</span>
-            <span className="cr-meta">ax · eve · {cards.length || '…'} windows</span>
+            <span className="cr-title">
+              {busy ? 'Recomputing ' : ''}
+              {title ?? 'conversation'}
+            </span>
+            <span className="cr-meta">ax · eve · {cards.length || '…'} windows · Esc to close</span>
           </div>
           <div className="cr-progress-row">
             <div className="cr-track">
