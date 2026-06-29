@@ -1,28 +1,40 @@
 'use client'
 
-import { FormEvent, KeyboardEvent, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FormEvent, KeyboardEvent, ReactNode, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@base-ui/react/button'
 import type {
-  EveMessageData,
   EveMessageInputRequest,
   EveMessagePart,
-  UseEveAgentHelpers,
 } from 'eve/react'
+import { useEveAgent } from 'eve/react'
 import type { HandleMessageStreamEvent, InputResponse } from 'eve/client'
 import { CollapseIcon, ExpandIcon, SendIcon } from './icons'
 import { useEscapeKey } from './shared/useEscapeKey'
 
 type RespondFn = (response: InputResponse) => void
+export type ChatScope = 'whole' | 'window'
+
+export type ChatAutoRequest = {
+  id: string
+  message: string
+  clientContext: {
+    scope: ChatScope
+    conversationId: number | null
+    runId: number | null
+    windowId: number | null
+  }
+}
 
 type ChatPanelProps = {
-  agent: UseEveAgentHelpers<EveMessageData>
   conversationId?: number
   runId?: number
   windowId?: number | null
   label?: string
+  autoRequest?: ChatAutoRequest | null
+  onAutoRequestSent?: (id: string) => void
 }
 
-type Scope = 'whole' | 'window'
+type Scope = ChatScope
 type ActivityTone = 'neutral' | 'ok' | 'error'
 type ActivityItem = {
   key: string
@@ -108,6 +120,15 @@ function eventActivity(event: HandleMessageStreamEvent, index: number): Activity
     return { key, label: 'eve error', detail: event.data.message, tone: 'error' }
   }
   return null
+}
+
+function recentActivity(events: readonly HandleMessageStreamEvent[]): ActivityItem[] {
+  const items: ActivityItem[] = []
+  for (let index = events.length - 1; index >= 0 && items.length < 8; index--) {
+    const item = eventActivity(events[index], index)
+    if (item) items.push(item)
+  }
+  return items.reverse()
 }
 
 function toolDisplayName(part: DynamicToolPart): string {
@@ -513,26 +534,62 @@ function renderPart(part: EveMessagePart, key: number, onRespond: RespondFn) {
   return null
 }
 
-export default function ChatPanel({ agent, conversationId, runId, windowId = null, label = 'this run' }: ChatPanelProps) {
+function ChatPanel({
+  conversationId,
+  runId,
+  windowId = null,
+  label = 'this run',
+  autoRequest = null,
+  onAutoRequestSent,
+}: ChatPanelProps) {
+  const agent = useEveAgent()
+  const bodyRef = useRef<HTMLDivElement | null>(null)
   const endRef = useRef<HTMLDivElement | null>(null)
+  const scrollFrameRef = useRef<number | null>(null)
+  const sentAutoRequestRef = useRef<string | null>(null)
   const [draft, setDraft] = useState('')
   const [scope, setScope] = useState<Scope>(windowId != null ? 'window' : 'whole')
   const [expanded, setExpanded] = useState(false)
 
   const busy = agent.status === 'submitted' || agent.status === 'streaming'
-  const hasStreamingMessage = agent.data.messages.some((message) =>
-    message.parts.some((part) => 'state' in part && part.state === 'streaming'),
+  const hasStreamingMessage = useMemo(
+    () =>
+      agent.data.messages.some((message) =>
+        message.parts.some((part) => 'state' in part && part.state === 'streaming'),
+      ),
+    [agent.data.messages],
   )
-  const activity = useMemo(
-    () => agent.events.map(eventActivity).filter((item): item is ActivityItem => item != null).slice(-8),
-    [agent.events],
-  )
+  const activity = useMemo(() => recentActivity(agent.events), [agent.events])
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: 'end' })
+    const body = bodyRef.current
+    if (body && body.scrollHeight - body.scrollTop - body.clientHeight > 160) return
+    if (scrollFrameRef.current != null) window.cancelAnimationFrame(scrollFrameRef.current)
+    scrollFrameRef.current = window.requestAnimationFrame(() => {
+      endRef.current?.scrollIntoView({ block: 'end' })
+      scrollFrameRef.current = null
+    })
+    return () => {
+      if (scrollFrameRef.current != null) {
+        window.cancelAnimationFrame(scrollFrameRef.current)
+        scrollFrameRef.current = null
+      }
+    }
   }, [agent.data.messages, agent.status, activity.length])
 
   useEscapeKey(() => setExpanded(false), expanded)
+
+  useEffect(() => {
+    if (!autoRequest || busy || sentAutoRequestRef.current === autoRequest.id) return
+    sentAutoRequestRef.current = autoRequest.id
+    if (agent.status === 'error') agent.reset()
+    void agent
+      .send({
+        message: autoRequest.message,
+        clientContext: autoRequest.clientContext,
+      })
+      .finally(() => onAutoRequestSent?.(autoRequest.id))
+  }, [agent, autoRequest, busy, onAutoRequestSent])
 
   async function sendDraft() {
     const question = draft.trim()
@@ -623,7 +680,7 @@ export default function ChatPanel({ agent, conversationId, runId, windowId = nul
         </Button>
       </div>
 
-      <div className="chat-body">
+      <div className="chat-body" ref={bodyRef}>
         {agent.data.messages.map((message, mi) =>
           message.role === 'user' ? (
             <div key={mi} className="turn user">
@@ -686,3 +743,5 @@ export default function ChatPanel({ agent, conversationId, runId, windowId = nul
     </>
   )
 }
+
+export default memo(ChatPanel)
