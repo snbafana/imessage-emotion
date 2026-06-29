@@ -7,14 +7,31 @@ import { planCappedRunWindowConfig } from '../../src/lib/windows/windows'
 
 export default defineTool({
   description:
-    'Start a capped Ax recomputation of a conversation: builds a fresh analysis run and run-owned windows, then returns the ordered window plan. Follow up by calling score_window for each window in order.',
+    'Create a fresh capped Ax analysis run for a conversation and return its ordered window plan. This only creates windows; call score_window on each returned window to persist scores.',
   inputSchema: z.object({
-    conversationId: z.number(),
-    messageCount: z.number().optional().describe('Conversation message count when available'),
-    maxWindows: z.number().int().positive().max(200).default(200),
-    overlapPercent: z.number().int().min(10).max(40).default(25),
-    model: z.string().default('google/gemini-2.5-flash'),
-    effort: z.enum(['low', 'medium', 'high']).default('medium'),
+    conversationId: z.number().int().positive().describe('Conversation id to analyze'),
+    messageCount: z
+      .number()
+      .int()
+      .nonnegative()
+      .optional()
+      .describe('Conversation message count when the client already has it'),
+    maxWindows: z
+      .number()
+      .int()
+      .positive()
+      .max(200)
+      .default(200)
+      .describe('Maximum windows to create for this run'),
+    overlapPercent: z
+      .number()
+      .int()
+      .min(10)
+      .max(40)
+      .default(25)
+      .describe('Window overlap percentage; larger values preserve more context'),
+    model: z.string().min(1).default('google/gemini-2.5-flash').describe('Scoring model id'),
+    effort: z.enum(['low', 'medium', 'high']).default('medium').describe('Scoring effort level'),
   }),
   async execute({ conversationId, messageCount, maxWindows, overlapPercent, model, effort }) {
     const db = getDb()
@@ -47,7 +64,14 @@ export default defineTool({
       maxWindows,
       overlapPercent,
       model,
-      windows: windows.map((w) => ({ id: w.id, ordinal: w.ordinal, focal: `${w.focalStartOrdinal}-${w.focalEndOrdinal}` })),
+      windows: windows.map((w) => ({
+        id: w.id,
+        ordinal: w.ordinal,
+        range: {
+          all: `${w.startOrdinal}-${w.endOrdinal}`,
+          focal: `${w.focalStartOrdinal}-${w.focalEndOrdinal}`,
+        },
+      })),
       next: 'Call score_window(runId, windowId) for each window in order, then summarize.',
       citations: windows.map((w) => ({ type: 'window' as const, id: w.id, label: `W${w.ordinal}` })),
     }

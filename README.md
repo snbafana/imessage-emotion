@@ -68,10 +68,8 @@ high-fidelity without becoming unreadable thousand-window timelines.
 override with `EVE_MODEL`). It backs the "Ask the timeline" chat and works
 window-by-window, narrating *why* tone moved. Its tools (`agent/tools/`):
 
-- `list_run_windows` — every window in a run with dominant emotion + shift state.
+- `list_run_windows` — every window in a run with scores, shift deltas, strongest shifts, and recurrence hints.
 - `get_window_messages` — the focal/context/all messages in a window.
-- `compare_to_baseline` — per-emotion deltas for a window vs. the prior N.
-- `find_recurring_theme` — earlier windows sharing a window's dominant emotion.
 - `score_window` / `recompute_conversation` — (re)build and score a run's windows.
 
 Window-scoped questions go through a lightweight RAG path
