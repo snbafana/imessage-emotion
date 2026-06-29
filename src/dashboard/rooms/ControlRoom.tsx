@@ -1,8 +1,17 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ANCHOR_DISPLAY, EKMAN_ANCHORS, type Anchor } from '../lib/emotion/anchors'
-import { getWindowMessages, type DashboardApi, type MessageView, type WindowView } from './data'
+import { getWindowMessages, type DashboardApi, type MessageView, type WindowView } from '../data'
+import { useEscapeKey } from '../shared/useEscapeKey'
+import {
+  dominantInk,
+  EmotionBars,
+  RoomShell,
+  ROOM_ACTIVE_COLOR,
+  ROOM_ERROR_COLOR,
+  ROOM_IDLE_COLOR,
+  ROOM_SCORED_COLOR,
+} from './RoomShell'
 
 type CardState = 'queued' | 'reading' | 'scored' | 'error'
 type Card = {
@@ -42,16 +51,13 @@ function cardsFromWindows(windows: WindowView[]): Card[] {
 }
 
 const DOT: Record<CardState, string> = {
-  scored: 'oklch(0.69 0.12 182)',
-  reading: '#2EE6A6',
-  error: '#D6453B',
-  queued: '#C9C9CE',
+  scored: ROOM_SCORED_COLOR,
+  reading: ROOM_ACTIVE_COLOR,
+  error: ROOM_ERROR_COLOR,
+  queued: ROOM_IDLE_COLOR,
 }
 
 function WindowCard({ card, focal }: { card: Card; focal: MessageView[] | undefined }) {
-  const domInk = card.dominant
-    ? ANCHOR_DISPLAY[card.dominant as Anchor]?.ink ?? '#6B6B70'
-    : '#9A9AA0'
   // Show the tail of the focal slice — the messages most likely to drive the shift.
   const excerpt = (focal ?? []).filter((m) => m.text.trim().length > 0).slice(-3)
   return (
@@ -76,25 +82,10 @@ function WindowCard({ card, focal }: { card: Card; focal: MessageView[] | undefi
         )}
       </div>
 
-      <div className="cr-bars">
-        {EKMAN_ANCHORS.map((a) => {
-          const v = card.scores?.[a] ?? 0
-          return (
-            <div
-              key={a}
-              className="cr-bar"
-              title={`${ANCHOR_DISPLAY[a].label} ${v.toFixed(2)}`}
-              style={{
-                height: `${Math.max(3, Math.round(v * 38))}px`,
-                background: card.scores ? ANCHOR_DISPLAY[a].color : '#ECECEE',
-              }}
-            />
-          )
-        })}
-      </div>
+      <EmotionBars scores={card.scores} />
 
       <div className="cr-card-foot">
-        <span className="cr-dom" style={{ color: domInk }}>
+        <span className="cr-dom" style={{ color: dominantInk(card.dominant) }}>
           {card.dominant ?? (card.state === 'reading' ? 'scoring…' : card.state === 'queued' ? 'queued' : '—')}
         </span>
         <span className="cr-conf">{card.confidence != null ? `conf ${card.confidence.toFixed(2)}` : ''}</span>
@@ -128,14 +119,7 @@ export default function ControlRoom({
   const scored = cards.filter((c) => c.state === 'scored').length
   const reading = busy ? cards.filter((c) => c.state === 'queued').length : 0
 
-  // Esc closes the control room.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscapeKey(onClose)
 
   // Pull each window's focal messages so every card can show "what folks are
   // saying" as soon as the window appears — independent of the scorer.
@@ -152,39 +136,22 @@ export default function ControlRoom({
   }, [api, cards])
 
   return (
-    <div className="control-room">
-      <div className="cr-topbar">
-        <div className="cr-head">
-          <div className="cr-title-row">
-            <span className="cr-title">
-              {busy ? 'Recomputing ' : ''}
-              {title ?? 'conversation'}
-            </span>
-            <span className="cr-meta">ax · {cards.length || '…'} windows · Esc to close</span>
-          </div>
-          <div className="cr-progress-row">
-            <div className="cr-track">
-              <div className="cr-fill" style={{ width: `${cards.length ? (scored / cards.length) * 100 : 4}%` }} />
-            </div>
-            <span className="cr-meta">
-              {scored} / {cards.length} scored{busy ? ` · ${reading} reading` : ''}
-            </span>
-          </div>
-        </div>
-        <span className="cr-live">
-          <span className="cr-dot" style={{ background: busy ? '#2EE6A6' : '#C9C9CE' }} />
-          {busy ? 'live' : 'done'}
-        </span>
-        <button className="cr-close" onClick={onClose}>
-          {busy ? 'Hide' : 'Close'}
-        </button>
-      </div>
+    <RoomShell
+      title={`${busy ? 'Recomputing ' : ''}${title ?? 'conversation'}`}
+      meta={`ax · ${cards.length || '…'} windows`}
+      progressPercent={cards.length ? (scored / cards.length) * 100 : 4}
+      progressLabel={`${scored} / ${cards.length} scored${busy ? ` · ${reading} reading` : ''}`}
+      live={busy}
+      liveLabel={busy ? 'live' : 'done'}
+      closeLabel={busy ? 'Hide' : 'Close'}
+      onClose={onClose}
+    >
       <div className="cr-grid">
         {cards.length === 0 && <div className="cr-empty">Spinning up window readers…</div>}
         {cards.map((card) => (
           <WindowCard key={card.id} card={card} focal={focals[card.id]} />
         ))}
       </div>
-    </div>
+    </RoomShell>
   )
 }

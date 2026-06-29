@@ -9,8 +9,9 @@ import type { AnalysisSetupPlan, AnalysisSetupValue } from './EmotionTimeline'
 import ChatPanel from './ChatPanel'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
-import TwoTierRoom from './TwoTierRoom'
-import ControlRoom from './ControlRoom'
+import ControlRoom from './rooms/ControlRoom'
+import TwoTierRoom from './rooms/TwoTierRoom'
+import { useEscapeKey } from './shared/useEscapeKey'
 import { getDashboardApi } from './api'
 import {
   formatDateRange,
@@ -231,14 +232,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
     void reloadConversations()
   }, [reloadConversations])
 
-  useEffect(() => {
-    if (!showRecalcSetup) return
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setShowRecalcSetup(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [showRecalcSetup])
+  useEscapeKey(() => setShowRecalcSetup(false), showRecalcSetup)
 
   useEffect(() => {
     const query = searchQuery.trim()

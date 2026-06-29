@@ -10,6 +10,7 @@ import type {
 } from 'eve/react'
 import type { HandleMessageStreamEvent, InputResponse } from 'eve/client'
 import { CollapseIcon, ExpandIcon, SendIcon } from './icons'
+import { useEscapeKey } from './shared/useEscapeKey'
 
 type RespondFn = (response: InputResponse) => void
 
@@ -531,14 +532,7 @@ export default function ChatPanel({ agent, conversationId, runId, windowId = nul
     endRef.current?.scrollIntoView({ block: 'end' })
   }, [agent.data.messages, agent.status, activity.length])
 
-  useEffect(() => {
-    if (!expanded) return
-    function closeOnEscape(event: globalThis.KeyboardEvent) {
-      if (event.key === 'Escape') setExpanded(false)
-    }
-    window.addEventListener('keydown', closeOnEscape)
-    return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [expanded])
+  useEscapeKey(() => setExpanded(false), expanded)
 
   async function sendDraft() {
     const question = draft.trim()

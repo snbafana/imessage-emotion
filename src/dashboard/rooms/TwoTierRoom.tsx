@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { ANCHOR_DISPLAY, EKMAN_ANCHORS, type Anchor } from '../lib/emotion/anchors'
+import { useEscapeKey } from '../shared/useEscapeKey'
+import { dominantInk, EmotionBars, RoomShell, ROOM_IDLE_COLOR, ROOM_SCORED_COLOR } from './RoomShell'
 
 type Tier = 'fast' | 'reasoned'
 type Card = {
@@ -106,13 +107,7 @@ export default function TwoTierRoom({
     return () => es.close()
   }, [conversationId, focal, stride, topK])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscapeKey(onClose)
 
   const list = [...cards.values()].sort((a, b) => a.ordinal - b.ordinal)
   const triaged = list.length
@@ -120,30 +115,16 @@ export default function TwoTierRoom({
   const busy = phase === 'triage' || phase === 'explore'
 
   return (
-    <div className="control-room">
-      <div className="cr-topbar">
-        <div className="cr-head">
-          <div className="cr-title-row">
-            <span className="cr-title">RoBERTa → RLM · {title ?? 'conversation'}</span>
-            <span className="cr-meta">two-tier · {total || '…'} windows · Esc to close</span>
-          </div>
-          <div className="cr-progress-row">
-            <div className="cr-track">
-              <div className="cr-fill" style={{ width: `${total ? (triaged / total) * 100 : 4}%` }} />
-            </div>
-            <span className="cr-meta">
-              {triaged} / {total} triaged · {reasoned} deep-read{phase === 'triage' ? ' · scanning…' : ''}
-            </span>
-          </div>
-        </div>
-        <span className="cr-live">
-          <span className="cr-dot" style={{ background: busy ? '#2EE6A6' : '#C9C9CE' }} />
-          {phase === 'error' ? 'error' : busy ? 'live' : 'done'}
-        </span>
-        <button className="cr-close" onClick={onClose}>
-          {busy ? 'Hide' : 'Close'}
-        </button>
-      </div>
+    <RoomShell
+      title={`RoBERTa → RLM · ${title ?? 'conversation'}`}
+      meta={`two-tier · ${total || '…'} windows`}
+      progressPercent={total ? (triaged / total) * 100 : 4}
+      progressLabel={`${triaged} / ${total} triaged · ${reasoned} deep-read${phase === 'triage' ? ' · scanning…' : ''}`}
+      live={busy}
+      liveLabel={phase === 'error' ? 'error' : busy ? 'live' : 'done'}
+      closeLabel={busy ? 'Hide' : 'Close'}
+      onClose={onClose}
+    >
 
       {error && <div className="cr-empty">{error}</div>}
       {summary && (
@@ -158,13 +139,12 @@ export default function TwoTierRoom({
           <WindowCard key={card.id} card={card} />
         ))}
       </div>
-    </div>
+    </RoomShell>
   )
 }
 
 function WindowCard({ card }: { card: Card }) {
   const reasoned = card.tier === 'reasoned'
-  const domInk = card.dominant ? ANCHOR_DISPLAY[card.dominant as Anchor]?.ink ?? '#6B6B70' : '#9A9AA0'
   return (
     <div className={`cr-card ${reasoned ? 'reading' : ''}`}>
       <div className="cr-card-head">
@@ -172,25 +152,13 @@ function WindowCard({ card }: { card: Card }) {
         <span className="cr-focal">{card.focal}</span>
         <span
           className="cr-dot"
-          style={{ background: reasoned ? 'oklch(0.69 0.12 182)' : '#C9C9CE' }}
+          style={{ background: reasoned ? ROOM_SCORED_COLOR : ROOM_IDLE_COLOR }}
         />
         <span className="cr-state">{reasoned ? 'rlm' : 'roberta'}</span>
       </div>
-      <div className="cr-bars">
-        {EKMAN_ANCHORS.map((a) => {
-          const v = card.scores?.[a] ?? 0
-          return (
-            <div
-              key={a}
-              className="cr-bar"
-              title={`${ANCHOR_DISPLAY[a].label} ${v.toFixed(2)}`}
-              style={{ height: `${Math.max(3, Math.round(v * 38))}px`, background: card.scores ? ANCHOR_DISPLAY[a].color : '#ECECEE' }}
-            />
-          )
-        })}
-      </div>
+      <EmotionBars scores={card.scores} />
       <div className="cr-card-foot">
-        <span className="cr-dom" style={{ color: domInk }}>
+        <span className="cr-dom" style={{ color: dominantInk(card.dominant) }}>
           {card.dominant ?? '—'}
         </span>
         <span className="cr-conf">
