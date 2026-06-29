@@ -5,7 +5,10 @@ import type { ComparativeRunWindowConfig } from '../lib/windows/windows'
 import type { ConversationView, EmotionKey, RunView, WindowView } from './data'
 import { EMOTIONS, SCORE_KEYS, formatMessageCount, gradientFor, runStateLabel, timelineBlocks } from './data'
 
+export type AnalysisMethod = 'ax' | 'two-tier'
+
 export type AnalysisSetupValue = {
+  method: AnalysisMethod
   planner: 'capped' | 'manual'
   provider: 'openrouter' | 'openai'
   effort: 'low' | 'medium' | 'high'
@@ -15,6 +18,9 @@ export type AnalysisSetupValue = {
   contextMessages: number
   focalMessages: number
   minFocalMessages: number
+  twoTierFocal: number
+  twoTierStride: number
+  topK: number
 }
 
 export type AnalysisSetupPlan = {
@@ -385,7 +391,7 @@ export function AnalysisSetupPanel({
     <div className="analysis-setup">
       <div className="setup-summary">
         <div>
-          <span className="label">Ax run setup</span>
+          <span className="label">Run setup</span>
           <h2>{conversation ? conversation.title : 'Choose a conversation'}</h2>
         </div>
         <span className="setup-count">
@@ -393,108 +399,160 @@ export function AnalysisSetupPanel({
         </span>
       </div>
 
-      <div className="setup-grid">
-        <label className="setup-field">
-          <span>Provider</span>
-          <select
-            value={setup.provider}
-            onChange={(event) => onChange({ provider: event.target.value as AnalysisSetupValue['provider'] })}
-          >
-            <option value="openrouter">OpenRouter</option>
-            <option value="openai">OpenAI</option>
-          </select>
-        </label>
-        <label className="setup-field model-field">
-          <span>Model</span>
-          <input
-            list="ax-models"
-            value={setup.model}
-            onChange={(event) => onChange({ model: event.target.value })}
-          />
-          <datalist id="ax-models">
-            <option value="google/gemini-2.5-flash" />
-            <option value="google/gemini-2.5-flash-lite" />
-            <option value="anthropic/claude-haiku-4.5" />
-          </datalist>
-        </label>
-        <label className="setup-field">
-          <span>Effort</span>
-          <select
-            value={setup.effort}
-            onChange={(event) => onChange({ effort: event.target.value as AnalysisSetupValue['effort'] })}
-          >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </select>
-        </label>
-        <label className="setup-field">
-          <span>Max windows</span>
-          <input
-            type="number"
-            min={1}
-            max={200}
-            value={setup.maxWindows}
-            onChange={(event) => onChange({ maxWindows: numberInput(event.target.value, 200) })}
-          />
-        </label>
-        <label className="setup-field">
-          <span>Overlap</span>
-          <input
-            type="range"
-            min={10}
-            max={40}
-            value={setup.overlapPercent}
-            onChange={(event) => onChange({ overlapPercent: numberInput(event.target.value, 25) })}
-          />
-          <strong>{setup.overlapPercent}%</strong>
-        </label>
-      </div>
-
-      <div className="setup-mode" role="group" aria-label="Window planning mode">
+      <div className="setup-mode setup-method" role="group" aria-label="Analysis method">
         <button
           type="button"
-          data-selected={setup.planner === 'capped' ? '' : undefined}
-          onClick={() => onChange({ planner: 'capped' })}
+          data-selected={setup.method === 'ax' ? '' : undefined}
+          onClick={() => onChange({ method: 'ax' })}
         >
-          Capped planner
+          Ax · per-window
         </button>
         <button
           type="button"
-          data-selected={setup.planner === 'manual' ? '' : undefined}
-          onClick={() => onChange({ planner: 'manual' })}
+          data-selected={setup.method === 'two-tier' ? '' : undefined}
+          onClick={() => onChange({ method: 'two-tier' })}
         >
-          Manual window
+          RoBERTa → RLM
         </button>
       </div>
 
-      {setup.planner === 'manual' && (
+      {setup.method === 'ax' ? (
+        <>
+          <div className="setup-grid">
+            <label className="setup-field">
+              <span>Provider</span>
+              <select
+                value={setup.provider}
+                onChange={(event) => onChange({ provider: event.target.value as AnalysisSetupValue['provider'] })}
+              >
+                <option value="openrouter">OpenRouter</option>
+                <option value="openai">OpenAI</option>
+              </select>
+            </label>
+            <label className="setup-field model-field">
+              <span>Model</span>
+              <input
+                list="ax-models"
+                value={setup.model}
+                onChange={(event) => onChange({ model: event.target.value })}
+              />
+              <datalist id="ax-models">
+                <option value="google/gemini-2.5-flash" />
+                <option value="google/gemini-2.5-flash-lite" />
+                <option value="anthropic/claude-haiku-4.5" />
+              </datalist>
+            </label>
+            <label className="setup-field">
+              <span>Effort</span>
+              <select
+                value={setup.effort}
+                onChange={(event) => onChange({ effort: event.target.value as AnalysisSetupValue['effort'] })}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </label>
+            <label className="setup-field">
+              <span>Max windows</span>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={setup.maxWindows}
+                onChange={(event) => onChange({ maxWindows: numberInput(event.target.value, 200) })}
+              />
+            </label>
+            <label className="setup-field">
+              <span>Overlap</span>
+              <input
+                type="range"
+                min={10}
+                max={40}
+                value={setup.overlapPercent}
+                onChange={(event) => onChange({ overlapPercent: numberInput(event.target.value, 25) })}
+              />
+              <strong>{setup.overlapPercent}%</strong>
+            </label>
+          </div>
+
+          <div className="setup-mode" role="group" aria-label="Window planning mode">
+            <button
+              type="button"
+              data-selected={setup.planner === 'capped' ? '' : undefined}
+              onClick={() => onChange({ planner: 'capped' })}
+            >
+              Capped planner
+            </button>
+            <button
+              type="button"
+              data-selected={setup.planner === 'manual' ? '' : undefined}
+              onClick={() => onChange({ planner: 'manual' })}
+            >
+              Manual window
+            </button>
+          </div>
+
+          {setup.planner === 'manual' && (
+            <div className="setup-grid compact">
+              <label className="setup-field">
+                <span>Context</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={setup.contextMessages}
+                  onChange={(event) => onChange({ contextMessages: numberInput(event.target.value, 80) })}
+                />
+              </label>
+              <label className="setup-field">
+                <span>Focal</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={setup.focalMessages}
+                  onChange={(event) => onChange({ focalMessages: numberInput(event.target.value, 40) })}
+                />
+              </label>
+              <label className="setup-field">
+                <span>Min tail</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={setup.minFocalMessages}
+                  onChange={(event) => onChange({ minFocalMessages: numberInput(event.target.value, 20) })}
+                />
+              </label>
+            </div>
+          )}
+        </>
+      ) : (
         <div className="setup-grid compact">
-          <label className="setup-field">
-            <span>Context</span>
-            <input
-              type="number"
-              min={1}
-              value={setup.contextMessages}
-              onChange={(event) => onChange({ contextMessages: numberInput(event.target.value, 80) })}
-            />
-          </label>
           <label className="setup-field">
             <span>Focal</span>
             <input
               type="number"
               min={1}
-              value={setup.focalMessages}
-              onChange={(event) => onChange({ focalMessages: numberInput(event.target.value, 40) })}
+              value={setup.twoTierFocal}
+              onChange={(event) => onChange({ twoTierFocal: numberInput(event.target.value, 4) })}
             />
           </label>
           <label className="setup-field">
-            <span>Min tail</span>
+            <span>Stride</span>
             <input
               type="number"
               min={1}
-              value={setup.minFocalMessages}
-              onChange={(event) => onChange({ minFocalMessages: numberInput(event.target.value, 20) })}
+              value={setup.twoTierStride}
+              onChange={(event) => onChange({ twoTierStride: numberInput(event.target.value, 1) })}
+            />
+          </label>
+          <label className="setup-field">
+            <span>Deep reads</span>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={setup.topK}
+              onChange={(event) => onChange({ topK: numberInput(event.target.value, 25) })}
             />
           </label>
         </div>
@@ -516,10 +574,20 @@ export function AnalysisSetupPanel({
 
       <Button
         className="setup-run"
-        disabled={!conversation || running || !plan || Boolean(plan.error) || !setup.model.trim()}
+        disabled={
+          !conversation ||
+          running ||
+          !plan ||
+          Boolean(plan.error) ||
+          (setup.method === 'ax' && !setup.model.trim())
+        }
         onClick={onRun}
       >
-        {running ? 'Running Ax analysis...' : 'Run Ax analysis'}
+        {running
+          ? 'Running analysis...'
+          : setup.method === 'two-tier'
+            ? 'Run RoBERTa → RLM'
+            : 'Run Ax analysis'}
       </Button>
     </div>
   )
