@@ -1,12 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useEveAgent } from 'eve/react'
 import { Avatar } from '@base-ui/react/avatar'
 import { Button } from '@base-ui/react/button'
 import EmotionTimeline, { AnalysisSetupPanel } from './EmotionTimeline'
 import type { AnalysisSetupPlan, AnalysisSetupValue } from './EmotionTimeline'
-import ChatPanel from './ChatPanel'
+import ChatPanel, { type ChatAutoRequest } from './ChatPanel'
 import Inspector from './Inspector'
 import Sidebar from './Sidebar'
 import ControlRoom from './rooms/ControlRoom'
@@ -22,6 +21,7 @@ import {
   normalizeConversations,
   normalizeRuns,
   normalizeWindows,
+  SCORE_KEYS,
   type ConversationView,
   type MessageView,
   type RunView,
@@ -92,15 +92,11 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
     [conversations, matchedConversationIds, searchQuery],
   )
 
-  // The eve agent backs the "Ask the timeline" chat only; analysis runs go
-  // through the direct tRPC path with live polling (see startAxRun below).
-  const chat = useEveAgent()
   // Run id currently being scored in the background; drives the live poll.
   const [liveRunId, setLiveRunId] = useState<number | null>(null)
-  // Once a run finishes we ask eve to surface insights automatically. These refs
-  // let the live-poll effect trigger that without re-subscribing on every chat
-  // streaming tick, and guard against firing twice for the same run.
-  const requestInsightsRef = useRef<(run: RunView) => void>(() => {})
+  const [autoChatRequest, setAutoChatRequest] = useState<ChatAutoRequest | null>(null)
+  // Once a run finishes we ask eve to surface insights automatically. The guard
+  // prevents duplicate requests if polling observes the same completed run twice.
   const insightRequestedRunRef = useRef<number | null>(null)
 
   const selectedConversation = useMemo(
@@ -111,6 +107,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
     () => windows.find((window) => window.id === selectedWindowId) ?? null,
     [selectedWindowId, windows],
   )
+  const selectedWindowMessageId = selectedWindow?.rawId ?? null
   const isSyncing =
     syncStatus?.messages.state === 'syncing' || syncStatus?.contacts.state === 'syncing'
   const syncStatusLine = syncError ?? actionStatus ?? formatSyncStatus(syncStatus)
@@ -121,28 +118,6 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
         : null,
     [analysisSetup, selectedConversation],
   )
-
-  // Kept current on every render so the live-poll effect can fire it with the
-  // latest chat helpers without listing `chat` (which changes each stream tick)
-  // as a dependency.
-  requestInsightsRef.current = (finishedRun: RunView) => {
-    if (chat.status === 'submitted' || chat.status === 'streaming') return
-    if (chat.status === 'error') chat.reset()
-    const scored = finishedRun.scoredWindowCount ?? finishedRun.windowCount ?? 0
-    void chat.send({
-      message:
-        `The "${selectedConversation?.title ?? 'conversation'}" analysis just finished ` +
-        `(${finishedRun.scaleLabel}, ${scored} scored windows). Summarize the key emotional ` +
-        `insights across the whole timeline: the dominant moods, the biggest emotional shifts ` +
-        `and which windows they happen in, and anything worth a closer look. Keep it concise.`,
-      clientContext: {
-        scope: 'whole',
-        conversationId: selectedConversation ? Number(selectedConversation.rawId) : null,
-        runId: Number(finishedRun.rawId),
-        windowId: null,
-      },
-    })
-  }
 
   const reloadConversations = useCallback(async () => {
     if (!hasConversationApi(api)) {
@@ -311,13 +286,16 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
       setFocalMessages([])
       setWindowError(null)
 
-      if (!selectedWindow || !api?.getWindowMessages) return
+      if (selectedWindowMessageId == null || !api?.getWindowMessages) {
+        setWindowLoading(false)
+        return
+      }
 
       setWindowLoading(true)
       try {
         const [context, focal] = await Promise.all([
-          getWindowMessages(api, selectedWindow.rawId, 'context'),
-          getWindowMessages(api, selectedWindow.rawId, 'focal'),
+          getWindowMessages(api, selectedWindowMessageId, 'context'),
+          getWindowMessages(api, selectedWindowMessageId, 'focal'),
         ])
         if (!cancelled) {
           setContextMessages(context)
@@ -336,7 +314,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
     return () => {
       cancelled = true
     }
-  }, [api, selectedWindow])
+  }, [api, selectedWindowMessageId])
 
   async function syncMessages() {
     if (!api?.syncMessagesNow) return
@@ -394,6 +372,10 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
     if (nextRun) setRun(nextRun)
   }
 
+  const handleAutoRequestSent = useCallback((id: string) => {
+    setAutoChatRequest((current) => (current?.id === id ? null : current))
+  }, [])
+
   // Live progress: while a run scores in the background, poll its windows so the
   // timeline grows window-by-window, and stop once the run leaves the running
   // state. Owns `windows` for the live run (reloadWindows is gated off above).
@@ -402,6 +384,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
     const listRunsFn = api.listRuns
     const getRunWindowsFn = api.getRunWindows
     const conversationRawId = Number(selectedConversation.rawId)
+    const conversationTitle = selectedConversation.title
     let cancelled = false
 
     async function tick() {
@@ -412,10 +395,11 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
         ])
         if (cancelled) return
         const nextRuns = normalizeRuns(runsRaw).sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
-        setRuns(nextRuns)
-        setWindows(normalizeWindows(windowsRaw))
+        const nextWindows = normalizeWindows(windowsRaw)
+        setRuns((current) => mergeRunViews(current, nextRuns))
+        setWindows((current) => mergeWindowViews(current, nextWindows))
         const live = nextRuns.find((item) => Number(item.rawId) === liveRunId)
-        if (live) setRun(live)
+        if (live) setRun((current) => (sameRunView(current, live) ? current : live))
         if (!live || live.state !== 'pending') {
           setLiveRunId(null)
           setAnalysisRunning(false)
@@ -427,7 +411,21 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
           // On a successful run, have eve surface insights in the chat — once.
           if (live && live.state !== 'failed' && insightRequestedRunRef.current !== liveRunId) {
             insightRequestedRunRef.current = liveRunId
-            requestInsightsRef.current(live)
+            const scored = live.scoredWindowCount ?? live.windowCount ?? 0
+            setAutoChatRequest({
+              id: `run-${liveRunId}-insights`,
+              message:
+                `The "${conversationTitle}" analysis just finished ` +
+                `(${live.scaleLabel}, ${scored} scored windows). Summarize the key emotional ` +
+                `insights across the whole timeline: the dominant moods, the biggest emotional shifts ` +
+                `and which windows they happen in, and anything worth a closer look. Keep it concise.`,
+              clientContext: {
+                scope: 'whole',
+                conversationId: conversationRawId,
+                runId: Number(live.rawId),
+                windowId: null,
+              },
+            })
           }
         }
       } catch {
@@ -547,11 +545,12 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
               error={windowError}
             />
             <ChatPanel
-              agent={chat}
               conversationId={selectedConversation ? Number(selectedConversation.rawId) : undefined}
               runId={run ? Number(run.rawId) : undefined}
               windowId={selectedWindow ? Number(selectedWindow.rawId) : null}
               label={selectedConversation?.title}
+              autoRequest={autoChatRequest}
+              onAutoRequestSent={handleAutoRequestSent}
             />
           </div>
         </div>
@@ -612,6 +611,123 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
         />
       )}
     </div>
+  )
+}
+
+function mergeRunViews(current: RunView[], next: RunView[]): RunView[] {
+  const currentById = new Map(current.map((item) => [item.id, item]))
+  let changed = current.length !== next.length
+  const merged = next.map((item, index) => {
+    const previous = currentById.get(item.id)
+    if (previous && sameRunView(previous, item)) {
+      if (current[index] !== previous) changed = true
+      return previous
+    }
+    changed = true
+    return item
+  })
+  return changed ? merged : current
+}
+
+function mergeWindowViews(current: WindowView[], next: WindowView[]): WindowView[] {
+  const currentById = new Map(current.map((item) => [item.id, item]))
+  let changed = current.length !== next.length
+  const merged = next.map((item, index) => {
+    const previous = currentById.get(item.id)
+    if (previous && sameWindowView(previous, item)) {
+      if (current[index] !== previous) changed = true
+      return previous
+    }
+    changed = true
+    return item
+  })
+  return changed ? merged : current
+}
+
+function sameRunView(previous: RunView | null, next: RunView | null): boolean {
+  if (previous === next) return true
+  if (!previous || !next) return previous === next
+  return (
+    previous.id === next.id &&
+    previous.rawId === next.rawId &&
+    previous.conversationId === next.conversationId &&
+    previous.methodKey === next.methodKey &&
+    previous.status === next.status &&
+    previous.state === next.state &&
+    previous.scale === next.scale &&
+    previous.scaleLabel === next.scaleLabel &&
+    previous.configLabel === next.configLabel &&
+    previous.startedAt === next.startedAt &&
+    previous.completedAt === next.completedAt &&
+    previous.error === next.error &&
+    previous.windowCount === next.windowCount &&
+    previous.scoredWindowCount === next.scoredWindowCount &&
+    sameRunWindowConfig(previous.windowConfig, next.windowConfig) &&
+    sameFlatRecord(previous.scorerConfig, next.scorerConfig) &&
+    sameFlatRecord(previous.summary, next.summary)
+  )
+}
+
+function sameRunWindowConfig(
+  previous: RunView['windowConfig'],
+  next: RunView['windowConfig'],
+): boolean {
+  return (
+    previous.mode === next.mode &&
+    previous.contextMessages === next.contextMessages &&
+    previous.focalMessages === next.focalMessages &&
+    previous.stride === next.stride &&
+    previous.minFocalMessages === next.minFocalMessages
+  )
+}
+
+function sameWindowView(previous: WindowView, next: WindowView): boolean {
+  return (
+    previous.id === next.id &&
+    previous.rawId === next.rawId &&
+    previous.ordinal === next.ordinal &&
+    previous.status === next.status &&
+    previous.state === next.state &&
+    previous.label === next.label &&
+    previous.sub === next.sub &&
+    previous.startOrdinal === next.startOrdinal &&
+    previous.endOrdinal === next.endOrdinal &&
+    previous.contextStartOrdinal === next.contextStartOrdinal &&
+    previous.contextEndOrdinal === next.contextEndOrdinal &&
+    previous.focalStartOrdinal === next.focalStartOrdinal &&
+    previous.focalEndOrdinal === next.focalEndOrdinal &&
+    previous.startSentAt === next.startSentAt &&
+    previous.endSentAt === next.endSentAt &&
+    previous.messageCount === next.messageCount &&
+    previous.contextMessageCount === next.contextMessageCount &&
+    previous.focalMessageCount === next.focalMessageCount &&
+    previous.dominant === next.dominant &&
+    previous.intensity === next.intensity &&
+    previous.summary === next.summary &&
+    previous.rationale === next.rationale &&
+    previous.error === next.error &&
+    SCORE_KEYS.every(
+      (key) =>
+        previous.scores[key] === next.scores[key] &&
+        previous.scoreRationales[key] === next.scoreRationales[key],
+    )
+  )
+}
+
+function sameFlatRecord(
+  previous: Record<string, unknown>,
+  next: Record<string, unknown>,
+): boolean {
+  if (previous === next) return true
+  const previousKeys = Object.keys(previous)
+  const nextKeys = Object.keys(next)
+  return (
+    previousKeys.length === nextKeys.length &&
+    previousKeys.every(
+      (key) =>
+        Object.prototype.hasOwnProperty.call(next, key) &&
+        Object.is(previous[key], next[key]),
+    )
   )
 }
 
