@@ -55,7 +55,7 @@ Message content never leaves the machine.
 |---|---|---|
 | **Ax per-window LLM** | `run-analysis.ts` + `ax-scorer.ts` | **Live** — what the dashboard's **Recompute (ax)** runs. `createAxRun` plans windows, `finishAxRun`/`scoreAxRun` score them (concurrently), `completeAxRun` computes shifts + a summary. |
 | **RoBERTa triage** | `roberta-triage.ts` | Experimental Tier 1 — local distilroberta scores every window in one fast batched pass and ranks by shift magnitude. |
-| **Two-tier** | `two-tier-scorer.ts`, `app/api/two-tier/route.ts`, `TwoTierRoom.tsx` | Experimental — RoBERTa triage → LLM **deep-read** of only the top-K highest-shift windows, streamed to the UI over SSE. |
+| **Two-tier** | `two-tier-scorer.ts`, `src/app/api/two-tier/route.ts`, `TwoTierRoom.tsx` | Experimental — RoBERTa triage → LLM **deep-read** of only the top-K highest-shift windows, streamed to the UI over SSE. |
 | **RLM** | `rlm-scorer.ts` | Experimental — a single Ax RLM agent pages through windows and fans out sub-LLM scoring calls; for large runs. |
 
 The default window planner targets at most **200 windows** per conversation with
@@ -140,7 +140,7 @@ human gold label. Exports contain real message text and are gitignored.
 
 ## Layout
 
-- `app/` — Next.js routes: dashboard (`page.tsx`), `labeling/`, and APIs
+- `src/app/` — Next.js routes: dashboard (`page.tsx`), `labeling/`, and APIs
   (`api/trpc/[trpc]`, `api/two-tier`).
 - `src/server/` — the tRPC router + procedures.
 - `src/lib/` — framework-agnostic core:
