@@ -27,12 +27,13 @@ import {
   type RunView,
   type WindowView,
 } from './data'
-import { RecalcIcon, SettingsIcon } from './icons'
+import { RecalcIcon } from './icons'
 import type { AnalysisRunOptions, SyncStatus } from '../lib/api/types'
 import { planCappedRunWindowConfig, planRunWindowRanges } from '../lib/windows/windows'
 import './dashboard.css'
 
 const DEFAULT_ANALYSIS_SETUP: AnalysisSetupValue = {
+  method: 'ax',
   planner: 'capped',
   provider: 'openrouter',
   effort: 'medium',
@@ -42,6 +43,9 @@ const DEFAULT_ANALYSIS_SETUP: AnalysisSetupValue = {
   contextMessages: 80,
   focalMessages: 40,
   minFocalMessages: 20,
+  twoTierFocal: 4,
+  twoTierStride: 1,
+  topK: 25,
 }
 
 export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => void }) {
@@ -375,6 +379,16 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
     }
   }, [analysisSetup, api, reloadRun, selectedConversation, setupPlan])
 
+  const startSelectedAnalysis = useCallback(() => {
+    if (!selectedConversation || !setupPlan || setupPlan.error) return
+    if (analysisSetup.method === 'two-tier') {
+      setActionStatus('Streaming RoBERTa -> RLM analysis...')
+      setShowTwoTier(true)
+      return
+    }
+    void startAxRun()
+  }, [analysisSetup.method, selectedConversation, setupPlan, startAxRun])
+
   function selectRun(runId: string) {
     const nextRun = runs.find((item) => item.id === runId)
     if (nextRun) setRun(nextRun)
@@ -440,6 +454,7 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
         onSelect={setActiveId}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        onOpenSettings={onOpenSettings}
       />
 
       <div className="main">
@@ -476,12 +491,6 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
             )}
           </div>
           <div className="header-actions">
-            {onOpenSettings && (
-              <Button className="recalc secondary" onClick={onOpenSettings}>
-                <SettingsIcon />
-                Settings
-              </Button>
-            )}
             <Button
               className="recalc secondary"
               disabled={!api?.syncMessagesNow || isSyncing}
@@ -492,13 +501,6 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
             </Button>
             <Button
               className="recalc secondary"
-              disabled={!selectedConversation || showTwoTier}
-              onClick={() => setShowTwoTier(true)}
-            >
-              RoBERTa → RLM
-            </Button>
-            <Button
-              className="recalc secondary"
               disabled={!selectedConversation || showControlRoom}
               onClick={() => setShowControlRoom(true)}
             >
@@ -506,11 +508,11 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
             </Button>
             <Button
               className="recalc"
-              disabled={!selectedConversation || analysisRunning}
+              disabled={!selectedConversation || analysisRunning || showTwoTier}
               onClick={() => setShowRecalcSetup(true)}
             >
               <RecalcIcon />
-              {analysisRunning ? 'Recomputing…' : 'Recompute (ax)'}
+              {analysisRunning || showTwoTier ? 'Analyzing...' : 'Recompute'}
             </Button>
           </div>
         </header>
@@ -527,11 +529,11 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
             conversation={selectedConversation}
             setup={analysisSetup}
             setupPlan={setupPlan}
-            setupRunning={analysisRunning}
+            setupRunning={analysisRunning || showTwoTier}
             onChangeSetup={(patch) =>
               setAnalysisSetup((current) => ({ ...current, ...patch }))
             }
-            onRunSetup={startAxRun}
+            onRunSetup={startSelectedAnalysis}
             onSelectRun={selectRun}
             onSelectWindow={setSelectedWindowId}
           />
@@ -574,11 +576,11 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
               conversation={selectedConversation}
               setup={analysisSetup}
               plan={setupPlan}
-              running={analysisRunning}
+              running={analysisRunning || showTwoTier}
               onChange={(patch) => setAnalysisSetup((current) => ({ ...current, ...patch }))}
               onRun={() => {
                 setShowRecalcSetup(false)
-                void startAxRun()
+                startSelectedAnalysis()
               }}
             />
           </div>
@@ -589,8 +591,12 @@ export default function Dashboard({ onOpenSettings }: { onOpenSettings?: () => v
         <TwoTierRoom
           conversationId={Number(selectedConversation.rawId)}
           title={selectedConversation.title}
+          focal={clampInteger(analysisSetup.twoTierFocal, 1, Math.max(1, selectedConversation.messageCount))}
+          stride={clampInteger(analysisSetup.twoTierStride, 1, Math.max(1, selectedConversation.messageCount))}
+          topK={clampInteger(analysisSetup.topK, 1, 200)}
           onClose={() => setShowTwoTier(false)}
           onDone={() => {
+            setActionStatus('RoBERTa -> RLM analysis finished.')
             void reloadRun(selectedConversation)
           }}
         />
@@ -614,6 +620,27 @@ function buildAnalysisSetupPlan(
   messageCount: number,
 ): AnalysisSetupPlan {
   try {
+    if (setup.method === 'two-tier') {
+      const focalMessages = clampInteger(setup.twoTierFocal, 1, Math.max(1, messageCount))
+      const stride = clampInteger(setup.twoTierStride, 1, Math.max(1, messageCount))
+      const config = {
+        mode: 'comparative-message-count' as const,
+        contextMessages: Math.min(messageCount, focalMessages * 2),
+        focalMessages,
+        stride,
+        minFocalMessages: 1,
+      }
+      const windowCount = planRunWindowRanges(messageCount, config).length
+      return {
+        config,
+        windowCount,
+        error:
+          windowCount === 0
+            ? 'This conversation is too short for the selected focal window.'
+            : null,
+      }
+    }
+
     const overlapPercent = clampInteger(setup.overlapPercent, 10, 40)
     const maxWindows = clampInteger(setup.maxWindows, 1, 200)
     const config =

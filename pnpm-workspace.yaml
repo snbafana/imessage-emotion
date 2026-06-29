@@ -2,4 +2,7 @@ allowBuilds:
   '@ax-llm/ax': true
   better-sqlite3: true
   esbuild: true
+  onnxruntime-node: true
+  protobufjs: true
+  sharp: true
   unrs-resolver: true

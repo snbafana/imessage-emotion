@@ -3,7 +3,7 @@ import { Button } from '@base-ui/react/button'
 import { Input } from '@base-ui/react/input'
 import type { ConversationView } from './data'
 import { formatMessageCount } from './data'
-import { SearchIcon } from './icons'
+import { SearchIcon, SettingsIcon } from './icons'
 
 export default function Sidebar({
   activeId,
@@ -13,6 +13,7 @@ export default function Sidebar({
   onSelect,
   searchQuery,
   onSearchChange,
+  onOpenSettings,
 }: {
   activeId: string | null
   conversations: ConversationView[]
@@ -21,6 +22,7 @@ export default function Sidebar({
   onSelect: (id: string) => void
   searchQuery: string
   onSearchChange: (value: string) => void
+  onOpenSettings?: () => void
 }) {
   const searching = searchQuery.trim().length > 0
   const analyzed = conversations.filter((conversation) => conversation.latestRun != null)
@@ -88,6 +90,15 @@ export default function Sidebar({
         {renderGroup('Analyzed', analyzed)}
         {renderGroup('Run analysis', pending)}
       </div>
+
+      {onOpenSettings && (
+        <div className="sidebar-actions">
+          <Button className="sidebar-action" onClick={onOpenSettings}>
+            <SettingsIcon />
+            Settings
+          </Button>
+        </div>
+      )}
     </aside>
   )
 }
