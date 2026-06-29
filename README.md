@@ -13,7 +13,7 @@ Message content never leaves the machine.
 - **Next.js 14 (App Router)** + **React 18** — UI and server, on system Node.
 - **tRPC** — the typed boundary between the dashboard and the backend; inputs
   and outputs are inferred from the router, so there's no hand-written contract.
-- **Drizzle + better-sqlite3** — the app's own SQLite database
+- **better-sqlite3** — the app's own SQLite database
   (`src/lib/db/connection.ts`, `schema.ts`).
 - **Base UI** (`@base-ui/react`) — all interactive UI primitives.
 - **Ax** (`@ax-llm/ax`) — the structured LLM scorer used for analysis runs.
@@ -135,7 +135,6 @@ human gold label. Exports contain real message text and are gitignored.
 | `pnpm test` | Vitest |
 | `pnpm seed:mock` | Seed sample conversations into the app DB |
 | `pnpm runs:top-ax` | Batch-analyze the largest conversations with the Ax scorer |
-| `pnpm db:generate` | Drizzle migration generation |
 | `pnpm smoke:*` | Local smoke checks (onboarding status, app DB, ax/native DB, privacy) |
 
 ## Layout
