@@ -1,6 +1,6 @@
-import { getDb } from '../../../src/lib/db/connection'
-import { createAxRun } from '../../../src/lib/emotion/run-analysis'
-import { scoreRunTwoTier } from '../../../src/lib/emotion/two-tier-scorer'
+import { getDb } from '@/lib/db/connection'
+import { createAxRun } from '@/lib/emotion/run-analysis'
+import { scoreRunTwoTier } from '@/lib/emotion/two-tier-scorer'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
